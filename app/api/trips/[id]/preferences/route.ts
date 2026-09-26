@@ -8,8 +8,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const store = getStore();
   const trip = await store.getTrip(id);
   if (!trip) return fail("Trip not found", 404);
-  if (trip.status !== "collecting" && trip.status !== "reopened")
-    return fail("Options are already out, so preferences are locked. Use the vote instead.", 409);
+  if (trip.status === "decided") return fail("This trip is locked in already", 409);
 
   const b = await req.json().catch(() => null);
   if (!b) return fail("Invalid request");
@@ -17,6 +16,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!trip.members.includes(member)) return fail("Pick your name from the list");
 
   const existing = (await store.getPreferences(id)).find((p) => p.member === member);
+  // Once options are out, answers are locked. Someone who never answered may still join late so they can vote.
+  if (trip.status === "options" && existing)
+    return fail("Options are already out, so preferences are locked. Use the vote instead.", 409);
   if (existing && existing.edit_token !== b.edit_token)
     return fail(`${member} has already submitted from another device. Ask ${trip.organiser} if this is a mistake.`, 403);
 

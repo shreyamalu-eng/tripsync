@@ -49,7 +49,7 @@ export default function PrefWizard(props: {
   const draft = useMemo(() => { try { return JSON.parse(safeGet(draftKey) || "null"); } catch { return null; } }, [draftKey]);
   const initAvail: Record<string, Avail> = draft?.avail ?? (i
     ? Object.fromEntries(props.windows.map((w) => [w.id, i.available_windows.includes(w.id) ? "yes" : i.maybe_windows?.includes(w.id) ? "maybe" : "no"]))
-    : {});
+    : props.isOrganiser ? Object.fromEntries(props.windows.map((w) => [w.id, "yes"])) : {});
 
   const [step, setStep] = useState<number>(draft?.step ?? 0);
   const [avail, setAvail] = useState<Record<string, Avail>>(initAvail);
@@ -107,12 +107,14 @@ export default function PrefWizard(props: {
       {step === 0 && (
         <section>
           <h1 style={{ fontSize: 26, marginTop: 18 }}>Hi {props.member}! Which dates work for you?</h1>
-          <p className="muted small">{props.isOrganiser ? "You picked these. Now answer like everyone else." : "One tap each. “Maybe” is fine if you'd need to check."}</p>
-          <div className="row" style={{ margin: "12px 0" }}>
-            <button type="button" className="chip" onClick={() => setAvail(Object.fromEntries(props.windows.map((w) => [w.id, "yes"])))}>
-              <Sparkles size={15} /> All of them work
-            </button>
-          </div>
+          <p className="muted small">{props.isOrganiser ? "You picked these, so they're all ticked. Change any that don't work for you." : "One tap each. “Maybe” is fine if you'd need to check."}</p>
+          {props.windows.some((w) => avail[w.id] !== "yes") ? (
+            <div className="row" style={{ margin: "12px 0" }}>
+              <button type="button" className="chip" onClick={() => setAvail(Object.fromEntries(props.windows.map((w) => [w.id, "yes"])))}>
+                <Sparkles size={15} /> All of them work
+              </button>
+            </div>
+          ) : <div style={{ height: 12 }} />}
           {props.windows.map((w) => {
             const a = avail[w.id];
             const hol = holidaysIn(w.start, w.end);

@@ -25,7 +25,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (trip.status === "reopened" && prefs.length < 2) return fail("Need at least 2 people's preferences", 409);
   if (trip.status === "collecting" && !allSubmitted(trip, prefs)) {
     if (!isAdmin) return fail("Waiting for everyone to submit", 409);
-    if (!deadlinePassed && !b?.force) return fail("Deadline hasn't passed yet", 409);
+    if (!deadlinePassed) return fail("Deadline hasn't passed yet", 409);
     if (prefs.length < 2) return fail("Need at least 2 people's preferences", 409);
   }
 

@@ -102,11 +102,16 @@ export default function TripPage() {
 
   const generate = useCallback(async (asAdmin = false) => {
     setBuilding(true);
+    setErr("");
     try {
-      await fetch(`/api/trips/${id}/generate`, {
+      const r = await fetch(`/api/trips/${id}/generate`, {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify(asAdmin ? { admin_token: admin } : {}),
       });
+      // 409 means someone else already built them (or it isn't time yet): just refresh.
+      if (!r.ok && r.status !== 409) setErr("Couldn't build the options. Check your connection and try again.");
+    } catch {
+      setErr("Couldn't build the options. Check your connection and try again.");
     } finally { setBuilding(false); load(); }
   }, [id, admin, load]);
 
@@ -117,6 +122,14 @@ export default function TripPage() {
       generate();
     }
   }, [s, generate]);
+
+  // The moment the trip locks, jump up to the celebration card.
+  const status = s?.trip.status;
+  const prevStatus = useRef(status);
+  useEffect(() => {
+    if (prevStatus.current && prevStatus.current !== "decided" && status === "decided") window.scrollTo({ top: 0, behavior: "smooth" });
+    prevStatus.current = status;
+  }, [status]);
 
   if (!s) return <div className="card" style={{ marginTop: 20 }}>{err || <><Loader2 size={16} className="spin" /> Loading your trip…</>}</div>;
 
@@ -137,6 +150,34 @@ export default function TripPage() {
   };
   const switchPerson = () => { setWho(null); safeDel(`me:${id}`); setEditing(false); };
   const copy = (t: string, m: string) => { navigator.clipboard?.writeText(t).then(() => toast(m), () => toast("Couldn't copy. Long-press to copy instead.")); };
+
+  // The private 3-step form. Also used by a late joiner once options are out, so they can vote.
+  const wizard = (who: Who) => (
+    <>
+      {err && <div className="error">{err}</div>}
+      {trip.status === "options" && <div className="note">The options are already out. Add your answers so you can vote.</div>}
+      <PrefWizard
+        key={who.member + (s.me ? "1" : "0")}
+        tripId={id}
+        member={who.member}
+        windows={trip.date_windows}
+        initial={s.me}
+        busy={busy}
+        isOrganiser={isOrganiser}
+        onSwitch={switchPerson}
+        onSubmit={async (body) => {
+          const j = await post("preferences", { ...body, member: who.member, edit_token: who.token });
+          if (!j) return;
+          const v = { member: who.member, token: j.edit_token };
+          safeDel(`draft:${id}:${who.member}`);
+          setWho(v); safeSet(`me:${id}`, JSON.stringify(v)); setEditing(false);
+          toast("Saved. Your answers are private 🔒");
+          window.scrollTo({ top: 0 });
+        }}
+      />
+      {toastNode}
+    </>
+  );
 
   const Header = (
     <div style={{ margin: "10px 0 6px" }}>
@@ -220,33 +261,29 @@ export default function TripPage() {
       );
     }
 
-    if (editing || (!s.me && !s.submitted.find((x) => x.name === who.member)?.done)) {
-      return (
-        <>
-          {err && <div className="error">{err}</div>}
-          <PrefWizard
-            key={who.member + (s.me ? "1" : "0")}
-            tripId={id}
-            member={who.member}
-            windows={trip.date_windows}
-            initial={s.me}
-            busy={busy}
-            isOrganiser={isOrganiser}
-            onSwitch={switchPerson}
-            onSubmit={async (body) => {
-              const j = await post("preferences", { ...body, member: who.member, edit_token: who.token });
-              if (!j) return;
-              const v = { member: who.member, token: j.edit_token };
-              safeDel(`draft:${id}:${who.member}`);
-              setWho(v); safeSet(`me:${id}`, JSON.stringify(v)); setEditing(false);
-              toast("Saved. Your answers are private 🔒");
-              window.scrollTo({ top: 0 });
-            }}
-          />
-          {toastNode}
-        </>
-      );
-    }
+    if (editing || (!s.me && !s.submitted.find((x) => x.name === who.member)?.done)) return wizard(who);
+
+    // Organiser tool: clear one person's answers when someone answered as the wrong person.
+    const resetPanel = s.is_admin && doneCount > 0 && (
+          <details style={{ marginTop: 14 }}>
+            <summary className="small" style={{ cursor: "pointer", fontWeight: 700 }}>Someone answered as the wrong person?</summary>
+            <p className="tiny muted" style={{ margin: "8px 0" }}>Clear their answers so the right person can answer from their own phone.</p>
+            <div className="chips">
+              {s.submitted.filter((m) => m.done).map((m) => (
+                <button key={m.name} type="button" className="chip person" disabled={busy} onClick={async () => {
+                  if (!window.confirm(`Clear ${m.name}'s answers so they can answer again?`)) return;
+                  if (await post("admin", { admin_token: admin, action: "reset", member: m.name })) {
+                    if (who.member === m.name) switchPerson();
+                    toast(`${m.name} can answer again`);
+                    load();
+                  }
+                }}>
+                  <RotateCcw size={13} /> {m.name}
+                </button>
+              ))}
+            </div>
+          </details>
+    );
 
     // Waiting room
     return (
@@ -305,9 +342,15 @@ export default function TripPage() {
         {reopened && (
           <div className="note">Answers are open again, so anyone can edit theirs. {s.is_admin ? "Rebuild the options when everyone's done." : `${trip.organiser} will rebuild the options.`}</div>
         )}
+        {s.is_admin && reopened && resetPanel && <div className="card flat">{resetPanel}</div>}
         {s.is_admin && reopened && (
           <button className="btn primary block" disabled={busy || doneCount < 2} onClick={() => generate(true)} style={{ marginBottom: 12 }}>
             <Sparkles size={16} /> Rebuild options with {doneCount} people
+          </button>
+        )}
+        {s.all_submitted && err && (
+          <button className="btn primary block" disabled={building} onClick={() => generate()} style={{ marginBottom: 12 }}>
+            <Sparkles size={16} /> Try building the options again
           </button>
         )}
         {s.is_admin && !reopened && (
@@ -319,8 +362,9 @@ export default function TripPage() {
                 : `If someone goes quiet, after ${fmtDue(trip.deadline)} you can go ahead with whoever has answered.`}
             </p>
             <button className="btn soft sm" style={{ marginTop: 8 }} disabled={busy || !s.deadline_passed || doneCount < 2} onClick={() => generate(true)}>
-              <Sparkles size={14} /> Go ahead with {doneCount} people
+              <Sparkles size={14} /> Go ahead with {doneCount} {doneCount === 1 ? "person" : "people"}
             </button>
+            {resetPanel}
           </div>
         )}
         {toastNode}
@@ -329,9 +373,15 @@ export default function TripPage() {
   }
 
   // ---------- 3. Options & 4. Decided ----------
+  // Someone who never answered picks their name: they answer first, then vote.
+  if (trip.status === "options" && who && editing) return wizard(who);
+
   const decided = trip.status === "decided" ? s.options.find((o) => o.id === trip.decided_option_id) : null;
   const dw = decided ? winById(decided.window_id) : undefined;
-  const canVote = !!who && trip.status === "options";
+  const canVote = !!s.me && trip.status === "options";
+  // Be honest when no option works for the whole group, and say who it's blocked on.
+  const best = s.options[0];
+  const blockedOn = best ? trip.members.filter((m) => best.fit[m]?.level === "no") : [];
 
   return (
     <>
@@ -366,6 +416,17 @@ export default function TripPage() {
           </p>
           {s.options[0]?.source === "rules" && <p className="tiny muted" style={{ marginTop: 6 }}>Built with the rules-only planner (AI was unavailable). Costs are rough estimates.</p>}
         </div>
+      )}
+
+      {trip.status === "options" && blockedOn.length > 0 && (
+        <div className="note">
+          <b>None of these work for all {trip.members.length} of you yet.</b> Even the top option doesn&apos;t work for {blockedOn.join(", ")}. Tap their row on a card to see why.
+          {s.is_admin ? " You can reopen answers below so people can change their dates or preferences." : ` ${trip.organiser} can reopen answers so people can adjust.`}
+        </div>
+      )}
+
+      {who && !s.me && trip.status === "options" && s.submitted.find((x) => x.name === who.member)?.done && (
+        <div className="note"><Info size={14} style={{ verticalAlign: -2 }} /> {who.member} answered on another device. Open the link there to vote.</div>
       )}
 
       {!who && trip.status === "options" && (

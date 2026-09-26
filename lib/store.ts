@@ -14,6 +14,7 @@ export interface Store {
   updateTrip(id: string, patch: Partial<Trip>): Promise<void>;
   getPreferences(tripId: string): Promise<Preference[]>;
   upsertPreference(p: Preference): Promise<void>;
+  deletePreference(tripId: string, member: string): Promise<void>;
   getOptions(tripId: string): Promise<TripOption[]>;
   replaceOptions(tripId: string, opts: TripOption[]): Promise<void>;
   getVotes(tripId: string): Promise<Vote[]>;
@@ -48,6 +49,9 @@ class SupabaseStore implements Store {
   }
   async upsertPreference(p: Preference) {
     this.check(await this.db.from("preferences").upsert(p, { onConflict: "trip_id,member" }));
+  }
+  async deletePreference(tripId: string, member: string) {
+    this.check(await this.db.from("preferences").delete().eq("trip_id", tripId).eq("member", member));
   }
   async getOptions(tripId: string) {
     return (this.check(
@@ -112,6 +116,11 @@ class LocalStore implements Store {
     const db = this.load();
     db.preferences = db.preferences.filter((x) => !(x.trip_id === p.trip_id && x.member === p.member));
     db.preferences.push(p);
+    this.save();
+  }
+  async deletePreference(tripId: string, member: string) {
+    const db = this.load();
+    db.preferences = db.preferences.filter((x) => !(x.trip_id === tripId && x.member === member));
     this.save();
   }
   async getOptions(tripId: string) {

@@ -13,7 +13,8 @@ async function wiki(title: string): Promise<string | null> {
     const j = await r.json();
     if (j.type === "disambiguation") return null;
     const src: string | undefined = j.originalimage?.source ?? j.thumbnail?.source;
-    if (!src || /\.svg/i.test(src) || /map|flag|locator|emblem|seal/i.test(src)) return null;
+    // Skip maps, flags and diagrams: real photos are almost always JPEGs.
+    if (!src || !/\.jpe?g/i.test(src) || /map|flag|locator|emblem|seal|district|_in_india/i.test(src)) return null;
     // Ask for a phone-sized rendition when Wikimedia gives us a thumbnail URL.
     return j.thumbnail?.source ? j.thumbnail.source.replace(/\/\d+px-/, "/960px-") : src;
   } catch {

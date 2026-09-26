@@ -8,14 +8,16 @@ export async function POST(req: Request) {
   if (!b) return fail("Invalid request");
 
   const name = String(b.name ?? "").trim().slice(0, 80);
-  const organiser = String(b.organiser ?? "").trim().slice(0, 40);
-  const members: string[] = Array.from(
-    new Set<string>((Array.isArray(b.members) ? b.members : []).map((m: unknown) => String(m).trim().slice(0, 40)).filter(Boolean))
-  );
-  if (organiser && !members.includes(organiser)) members.unshift(organiser);
+  const organiser = String(b.organiser ?? "").trim().replace(/\s+/g, " ").slice(0, 40);
+  // "Riya", "riya" and "RIYA " are one person.
+  const members: string[] = [];
+  for (const raw of [organiser, ...(Array.isArray(b.members) ? b.members : [])]) {
+    const m = String(raw).trim().replace(/\s+/g, " ").slice(0, 40);
+    if (m && !members.some((x) => x.toLowerCase() === m.toLowerCase())) members.push(m);
+  }
 
   const windows: DateWindow[] = (Array.isArray(b.date_windows) ? b.date_windows : [])
-    .filter((w: any) => w?.start && w?.end && w.end >= w.start)
+    .filter((w: any) => w?.start && w?.end && w.end >= w.start && w.end >= new Date().toISOString().slice(0, 10))
     .slice(0, 6)
     .map((w: any, i: number) => ({
       id: `w${i + 1}`,

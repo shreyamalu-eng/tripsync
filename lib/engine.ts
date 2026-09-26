@@ -37,12 +37,17 @@ export function groupNights(prefs: Preference[], maxNights: number) {
 }
 
 // ---------- per-person fit ----------
+// `reasons` are shown to the whole group, so budget and won't-do details are folded into one
+// neutral line. `mine` holds the full detail and is only ever sent to that person (lib/view.ts).
 export function scoreMember(c: Candidate, member: string, pref: Preference | undefined): MemberFit {
-  if (!pref) return { level: "stretch", score: 50, reasons: ["Hasn't shared preferences yet"] };
+  if (!pref) return { level: "stretch", score: 50, reasons: ["Hasn't shared preferences yet"], mine: [] };
   const reasons: string[] = [];
+  const mine: string[] = [];
   let score = 0;
   let hardFail = false;
   let soft = false;
+  let privateNo = false;
+  let privateSoft = false;
 
   if (pref.available_windows.includes(c.window_id)) {
     reasons.push("Free on these dates");
@@ -58,29 +63,43 @@ export function scoreMember(c: Candidate, member: string, pref: Preference | und
   if (est) {
     if (est.cost_max <= pref.budget_max) {
       score += 40;
-      reasons.push("Within budget");
+      mine.push("Within your budget");
     } else if (est.cost_min <= pref.budget_max * 1.15) {
       score += 20;
-      soft = true;
-      reasons.push("A bit over budget");
+      privateSoft = true;
+      mine.push("A bit over your budget");
     } else {
-      hardFail = true;
-      reasons.push("Over budget");
+      privateNo = true;
+      mine.push("Over your budget");
     }
     if (est.conflict) {
-      soft = true;
-      reasons.push("Clashes with something they'd rather avoid");
+      privateSoft = true;
+      mine.push(`Clashes with something you'd rather avoid (${est.conflict.toLowerCase()})`);
     } else score += 30;
+
+    // A journey that eats the trip is not a "stretch": 36h each way for 2 nights doesn't work.
     const hrs = Number(/(\d+(?:\.\d+)?)\s*h/.exec(est.travel)?.[1] ?? 0);
-    if (hrs > 12) {
+    const tooFar = Math.max(16, c.nights * 6);
+    if (hrs > tooFar) {
+      hardFail = true;
+      reasons.push(`Journey too long for ${c.nights} night${c.nights > 1 ? "s" : ""} (${est.travel.replace("~", "")} each way)`);
+    } else if (hrs > 12) {
       soft = true;
       score -= 10;
-      reasons.push(`Very long journey (${est.travel.replace("~", "")})`);
+      reasons.push(`Long journey (${est.travel.replace("~", "")})`);
     }
   } else {
     score += 35;
     soft = true;
     reasons.push("Cost not estimated");
+  }
+
+  if (privateNo) {
+    hardFail = true;
+    reasons.push("Doesn't fit their private limits");
+  } else if (privateSoft) {
+    soft = true;
+    reasons.push("A stretch on their private limits");
   }
 
   const vibeMatch = c.tags.filter((t) => pref.destination_types.includes(t));
@@ -94,8 +113,12 @@ export function scoreMember(c: Candidate, member: string, pref: Preference | und
   }
 
   const level = hardFail ? "no" : !soft && score >= 75 ? "works" : "stretch";
-  return { level, score: hardFail ? Math.min(score, 30) : score, reasons };
+  return { level, score: hardFail ? Math.min(score, 30) : score, reasons, mine };
 }
+
+// "Goa (North)", "North Goa" and "South Goa" are the same trip as far as the group is concerned.
+const baseName = (d: string) =>
+  d.toLowerCase().replace(/\(.*?\)/g, " ").replace(/\b(north|south|east|west|old|new|central)\b/g, " ").replace(/\s+/g, " ").trim();
 
 export function rankCandidates(trip: Trip, prefs: Preference[], cands: Candidate[]): TripOption[] {
   const byMember = new Map(prefs.map((p) => [p.member, p]));
@@ -112,8 +135,8 @@ export function rankCandidates(trip: Trip, prefs: Preference[], cands: Candidate
   const seen = new Set<string>();
   const top = [];
   for (const s of scored) {
-    if (seen.has(s.c.destination)) continue;
-    seen.add(s.c.destination);
+    if (seen.has(baseName(s.c.destination))) continue;
+    seen.add(baseName(s.c.destination));
     top.push(s);
     if (top.length === 3) break;
   }

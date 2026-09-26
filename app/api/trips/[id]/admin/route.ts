@@ -1,6 +1,7 @@
 // Organiser-only actions. The organiser runs the process; she does not own the decision.
 //  - lock: only if a majority is in and nobody said "can't do"
 //  - reopen: clear options + votes so people can edit preferences again
+//  - reset: clear one person's answers (someone answered as the wrong person) so they can answer again
 import { getStore } from "@/lib/store";
 import { fail, json } from "@/lib/view";
 import { canLock } from "@/lib/engine";
@@ -26,6 +27,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     await store.clearVotes(id);
     await store.replaceOptions(id, []);
     await store.updateTrip(id, { status: "reopened", decided_option_id: null });
+    return json({ ok: true });
+  }
+  if (b.action === "reset") {
+    if (trip.status !== "collecting" && trip.status !== "reopened")
+      return fail("Reopen answers first, then reset this person", 409);
+    const member = String(b.member ?? "");
+    if (!trip.members.includes(member)) return fail("Unknown person");
+    await store.deletePreference(id, member);
     return json({ ok: true });
   }
   return fail("Unknown action");

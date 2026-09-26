@@ -122,6 +122,12 @@ export async function geminiCandidates(trip: Trip, prefs: Preference[]): Promise
     model = await resolveModel(key);
     res = await callGemini(key, model, brief(trip, prefs));
   }
+  // "High demand" (503), rate limits (429) and blips (500) are usually short: try the lighter
+  // Flash model once before falling back to the rules planner.
+  if ([429, 500, 503].includes(res.status)) {
+    console.warn(`[gemini] ${model} returned ${res.status}, trying gemini-flash-lite-latest`);
+    res = await callGemini(key, "gemini-flash-lite-latest", brief(trip, prefs));
+  }
   if (!res.ok) throw new Error(`Gemini error ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const j = await res.json();
   const text = (j.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? "").join("");

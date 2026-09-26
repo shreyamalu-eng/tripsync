@@ -254,6 +254,8 @@ input[type="range"] { width: 100%; accent-color: var(--forest); height: 28px; }
 .vote-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
 .vote-row .btn { padding: 13px 10px; }
 .vote-row .btn.in-on { background: var(--works); color: #fff; }
+/* Keep the chosen vote looking chosen while it saves (no grey flash). */
+.vote-row .btn:disabled { opacity: 0.85; }
 .vote-row .btn.cant-on { background: var(--no); color: #fff; }
 .tally { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 13px; }
 .tally .progress { flex: 1; }

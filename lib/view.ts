@@ -57,7 +57,13 @@ export async function publicState(trip: Trip, who?: { member?: string | null; to
       works_count: Object.values(o.fit).filter((f) => f.level === "works").length,
       no_count: Object.values(o.fit).filter((f) => f.level === "no").length,
       source: o.source,
-      fit: o.fit, // levels + neutral reasons only
+      // Levels + neutral reasons for everyone; the private detail only for the viewer's own row.
+      fit: Object.fromEntries(
+        Object.entries(o.fit).map(([m, f]) => [
+          m,
+          { level: f.level, score: f.score, reasons: f.reasons, ...(mine?.member === m ? { mine: f.mine ?? [] } : {}) },
+        ])
+      ),
       my_estimate: mine ? o.estimates[mine.member] ?? null : null,
       votes: tally(trip, votes, o.id),
     })),

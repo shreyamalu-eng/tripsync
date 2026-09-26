@@ -16,7 +16,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const member = String(b?.member ?? "");
   if (!trip.members.includes(member)) return fail("Pick your name first");
   const pref = (await store.getPreferences(id)).find((p) => p.member === member);
-  if (pref && pref.edit_token !== b.edit_token) return fail("You can only vote as yourself", 403);
+  // The edit token proves who you are, so only people who answered can vote.
+  // Late joiners add their answers first (the preferences route allows that for them).
+  if (!pref) return fail("Add your answers first, then you can vote", 403);
+  if (pref.edit_token !== b.edit_token) return fail("You can only vote as yourself", 403);
 
   const options = await store.getOptions(id);
   if (!options.some((o) => o.id === b.option_id)) return fail("Unknown option");

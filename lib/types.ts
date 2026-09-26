@@ -45,7 +45,8 @@ export type FitLevel = "works" | "stretch" | "no";
 export type MemberFit = {
   level: FitLevel;
   score: number; // 0-100
-  reasons: string[]; // safe to show the group - no raw budgets
+  reasons: string[]; // safe to show the group - no budgets or won't-dos
+  mine?: string[]; // private detail (budget, won't-dos): only sent to this person
 };
 
 export type MemberEstimate = {

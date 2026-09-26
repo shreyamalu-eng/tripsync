@@ -5,7 +5,10 @@ import { Check, X, Wallet, Route, CalendarDays, Moon, ChevronDown, Lock, Users }
 import { Avatar, Scene, sceneFor, inrK } from "./ui";
 import { leaveDays, rangeLabel } from "@/lib/holidays";
 
-export type Fit = { level: "works" | "stretch" | "no"; score: number; reasons: string[] };
+export type Fit = { level: "works" | "stretch" | "no"; score: number; reasons: string[]; mine?: string[] };
+
+// Your own row shows your private detail (budget, deal-breakers) instead of the neutral line everyone else sees.
+const reasonsFor = (f: Fit) => (f.mine ? [...f.reasons.filter((r) => !r.includes("private limits")), ...f.mine] : f.reasons);
 export type Opt = {
   id: string; rank: number; destination: string; region: string; window_id: string; nights: number;
   summary: string; why: string; tags: string[]; group_score: number; source: string; image: string | null;
@@ -39,7 +42,7 @@ export function Matrix({ options, members, me }: { options: Opt[]; members: stri
                 const f = o.fit[m];
                 const v = o.votes.in.includes(m) ? "in" : o.votes.cant.includes(m) ? "cant" : null;
                 return (
-                  <td key={o.id} title={f ? `${LEVEL[f.level]}: ${f.reasons.join(", ")}` : ""}>
+                  <td key={o.id} title={f ? `${LEVEL[f.level]}: ${reasonsFor(f).join(", ")}` : ""}>
                     <span className={`dot ${f?.level ?? "none"}`} />
                     {v && <span style={{ marginLeft: 4, color: v === "in" ? "var(--works)" : "var(--no)" }}>{v === "in" ? <Check size={13} strokeWidth={3} /> : <X size={13} strokeWidth={3} />}</span>}
                   </td>
@@ -115,7 +118,7 @@ export function OptionCard(props: {
                   <span className={`lvl ${f?.level}`}>{f ? LEVEL[f.level] : "—"}</span>
                   <ChevronDown size={15} color="var(--muted)" style={{ transform: open === m ? "rotate(180deg)" : undefined, transition: "transform .15s" }} />
                 </div>
-                {open === m && f && <div className="reasons">{f.reasons.join(" · ")}</div>}
+                {open === m && f && <div className="reasons">{reasonsFor(f).join(" · ")}{f.mine && f.mine.length > 0 && <span className="tiny muted"> · only you see the budget part</span>}</div>}
               </div>
             );
           })}
