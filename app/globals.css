@@ -238,7 +238,7 @@ input[type="range"] { width: 100%; accent-color: var(--forest); height: 28px; }
 .opt-hero > *:not(img):not(svg) { position: relative; z-index: 1; }
 .opt-hero h2 { color: #fff; font-size: 24px; margin: 0; }
 .opt-hero .rank { position: absolute; top: 14px; left: 14px; z-index: 1; background: rgba(255, 255, 255, 0.92); color: var(--forest); font-weight: 800; font-size: 12px; border-radius: 999px; padding: 5px 10px; }
-.opt-hero .fitbadge { position: absolute; top: 14px; right: 14px; z-index: 1; background: var(--lime); color: var(--forest); font-weight: 800; font-size: 12px; border-radius: 999px; padding: 5px 10px; }
+.opt-hero .fitbadge { position: absolute; top: 14px; right: 14px; max-width: calc(100% - 110px); white-space: nowrap; z-index: 1; background: var(--lime); color: var(--forest); font-weight: 800; font-size: 12px; border-radius: 999px; padding: 5px 10px; }
 .opt-body { padding: 16px 18px 18px; }
 .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 12px; }
 .fact { background: var(--paper); border-radius: 14px; padding: 10px 12px; }
@@ -294,5 +294,7 @@ input[type="range"] { width: 100%; accent-color: var(--forest); height: 28px; }
   .tiles { grid-template-columns: repeat(5, 1fr); }
   .opts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start; }
   .opts-grid .opt { margin: 0; }
+  /* Narrow 3-up cards: stack the two badges instead of overlapping them. */
+  .opts-grid .opt-hero .fitbadge { top: 48px; right: auto; left: 14px; max-width: none; }
   .hide-sm { display: initial; }
 }

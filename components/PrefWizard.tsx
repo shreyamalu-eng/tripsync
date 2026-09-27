@@ -6,11 +6,13 @@ import {
   Coffee, Music, UtensilsCrossed, Bus, Clock, Plane, Footprints, Snowflake, PartyPopper, BedDouble, Car, Sparkles,
 } from "lucide-react";
 import CityPicker, { type CityValue } from "./CityPicker";
+import RangeCalendar, { type Win } from "./RangeCalendar";
 import { dayDiff, holidaysIn, leaveDays, rangeLabel } from "@/lib/holidays";
 import { inr, safeGet, safeSet } from "./ui";
 
-type W = { id: string; label: string; start: string; end: string };
+type W = { id: string; label: string; start: string; end: string; added_by?: string; added_at?: string };
 type Initial = null | {
+  updated_at?: string;
   origin_city: string; origin_lat: number | null; origin_lon: number | null; budget_max: number;
   available_windows: string[]; maybe_windows: string[]; trip_nights: number; destination_types: string[]; wont_do: string[]; notes: string;
 };
@@ -48,7 +50,9 @@ export default function PrefWizard(props: {
   const draftKey = `draft:${props.tripId}:${props.member}`;
   const draft = useMemo(() => { try { return JSON.parse(safeGet(draftKey) || "null"); } catch { return null; } }, [draftKey]);
   const initAvail: Record<string, Avail> = draft?.avail ?? (i
-    ? Object.fromEntries(props.windows.map((w) => [w.id, i.available_windows.includes(w.id) ? "yes" : i.maybe_windows?.includes(w.id) ? "maybe" : "no"]))
+    ? Object.fromEntries(props.windows
+        .filter((w) => i.available_windows.includes(w.id) || i.maybe_windows?.includes(w.id) || !(w.added_at && i.updated_at && w.added_at > i.updated_at))
+        .map((w) => [w.id, i.available_windows.includes(w.id) ? "yes" : i.maybe_windows?.includes(w.id) ? "maybe" : "no"]))
     : props.isOrganiser ? Object.fromEntries(props.windows.map((w) => [w.id, "yes"])) : {});
 
   const [step, setStep] = useState<number>(draft?.step ?? 0);
@@ -61,14 +65,18 @@ export default function PrefWizard(props: {
   const [easy, setEasy] = useState<boolean>(draft?.easy ?? (!!i && i.wont_do.length === 0));
   const [notes, setNotes] = useState<string>(draft?.notes ?? i?.notes ?? "");
   const [showNotes, setShowNotes] = useState(!!(draft?.notes || i?.notes));
+  // Dates this person suggests on top of the organiser's. They count as "Can go" for them.
+  const [extra, setExtra] = useState<Win[]>(draft?.extra ?? []);
+  const [showCal, setShowCal] = useState(!!draft?.extra?.length);
+  const room = Math.max(0, 6 - props.windows.length);
 
   useEffect(() => {
-    safeSet(draftKey, JSON.stringify({ step, avail, city, budget, nights, vibes, wont, easy, notes }));
-  }, [draftKey, step, avail, city, budget, nights, vibes, wont, easy, notes]);
+    safeSet(draftKey, JSON.stringify({ step, avail, city, budget, nights, vibes, wont, easy, notes, extra }));
+  }, [draftKey, step, avail, city, budget, nights, vibes, wont, easy, notes, extra]);
   useEffect(() => { window.scrollTo({ top: 0, behavior: "smooth" }); }, [step]);
 
   const answered = props.windows.filter((w) => avail[w.id]).length;
-  const okWindows = props.windows.filter((w) => avail[w.id] === "yes" || avail[w.id] === "maybe");
+  const okWindows = [...props.windows.filter((w) => avail[w.id] === "yes" || avail[w.id] === "maybe"), ...extra];
   const maxNights = Math.max(1, ...okWindows.map((w) => dayDiff(w.start, w.end)), ...(okWindows.length ? [] : props.windows.map((w) => dayDiff(w.start, w.end))));
   const nightOpts = [1, 2, 3, 4, 5, 6].filter((n) => n <= Math.max(maxNights, 1));
   useEffect(() => { if (nights > maxNights) setNights(maxNights); }, [maxNights, nights]);
@@ -93,6 +101,7 @@ export default function PrefWizard(props: {
       destination_types: vibes,
       wont_do: easy ? [] : wont,
       notes,
+      new_windows: extra,
     });
   }
 
@@ -125,7 +134,7 @@ export default function PrefWizard(props: {
                 <div className="dcard-top">
                   <div>
                     <h3>{w.label}</h3>
-                    <div className="small muted">{rangeLabel(w.start, w.end)} · {n ? `${n} night${n > 1 ? "s" : ""}` : "day trip"}{hol.length ? ` · ${hol.join(", ")}` : ""}</div>
+                    <div className="small muted">{rangeLabel(w.start, w.end)} · {n ? `${n} night${n > 1 ? "s" : ""}` : "day trip"}{hol.length ? ` · ${hol.join(", ")}` : ""}{w.added_by ? ` · suggested by ${w.added_by}` : ""}</div>
                   </div>
                   <span className={`leave ${lv ? "some" : "zero"}`} style={{ marginTop: 0 }}>{lv ? `${lv} leave day${lv > 1 ? "s" : ""}` : "No leave"}</span>
                 </div>
@@ -139,8 +148,21 @@ export default function PrefWizard(props: {
               </div>
             );
           })}
+          {room > 0 && (
+            <div className="card flat" style={{ marginTop: 12 }}>
+              {!showCal ? (
+                <button type="button" className="linkbtn" onClick={() => setShowCal(true)}>+ Suggest other dates that work for you</button>
+              ) : (
+                <>
+                  <h3 style={{ marginBottom: 4 }}>Your suggested dates</h3>
+                  <p className="hint" style={{ marginTop: 0 }}>Everyone will be asked about these too. Up to {room} more.</p>
+                  <RangeCalendar windows={extra} onChange={setExtra} max={room} taken={props.windows} />
+                </>
+              )}
+            </div>
+          )}
           {answered === props.windows.length && okWindows.length === 0 && (
-            <div className="note">None of these work? That&apos;s useful too. Submit anyway and tell the organiser in the note on the last step.</div>
+            <div className="note">None of these work? Suggest dates that do, just above, so the group can consider them.</div>
           )}
         </section>
       )}

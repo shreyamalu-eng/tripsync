@@ -62,8 +62,9 @@ async function resolveModel(key: string): Promise<string> {
   return flash.find((n) => n.includes("latest")) ?? flash[flash.length - 1];
 }
 
-async function callGemini(key: string, model: string, userText: string) {
+async function callGemini(key: string, model: string, userText: string, ms: number) {
   return fetch(`${API}/models/${model}:generateContent`, {
+    signal: AbortSignal.timeout(ms),
     method: "POST",
     headers: { "content-type": "application/json", "x-goog-api-key": key },
     body: JSON.stringify({
@@ -72,6 +73,24 @@ async function callGemini(key: string, model: string, userText: string) {
       generationConfig: { responseMimeType: "application/json", temperature: 0.4 },
     }),
   });
+}
+
+// Models sometimes wrap the JSON in ``` fences or add text after it. Take the first complete object.
+function firstJson(text: string): unknown {
+  const start = text.indexOf("{");
+  if (start < 0) throw new Error("Gemini returned no JSON");
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+    } else if (c === '"') inStr = true;
+    else if (c === "{") depth++;
+    else if (c === "}" && --depth === 0) return JSON.parse(text.slice(start, i + 1));
+  }
+  throw new Error("Gemini returned incomplete JSON");
 }
 
 function num(x: unknown, fallback = 0) {
@@ -116,22 +135,36 @@ function clean(raw: any, trip: Trip, prefs: Preference[]): Candidate[] {
 export async function geminiCandidates(trip: Trip, prefs: Preference[]): Promise<Candidate[]> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY not set");
-  let model = process.env.GEMINI_MODEL || "gemini-flash-latest";
-  let res = await callGemini(key, model, brief(trip, prefs));
-  if (res.status === 404) {
-    model = await resolveModel(key);
-    res = await callGemini(key, model, brief(trip, prefs));
+  // Gemini models get overloaded ("high demand", 503) or slow at busy times. Try a few Flash models
+  // in turn within a 45s budget, so AI + photos stay under Vercel's 60s limit. If all fail, the
+  // caller falls back to the rules planner.
+  const models = [...new Set([process.env.GEMINI_MODEL?.trim() || "gemini-flash-latest", "gemini-3.1-flash-lite", "gemini-flash-lite-latest"])];
+  const until = Date.now() + 45000;
+  const prompt = brief(trip, prefs);
+  let res: Response | null = null;
+  let lastErr = "";
+  for (let model of models) {
+    const left = until - Date.now();
+    if (left < 4000) break;
+    try {
+      res = await callGemini(key, model, prompt, Math.min(20000, left));
+      if (res.status === 404) {
+        model = await resolveModel(key);
+        res = await callGemini(key, model, prompt, Math.min(20000, until - Date.now()));
+      }
+      if (res.ok) break;
+      lastErr = `${model} returned ${res.status}`;
+    } catch (e) {
+      lastErr = `${model}: ${(e as Error).message}`;
+      res = null;
+    }
+    console.warn(`[gemini] ${lastErr}, trying the next model`);
   }
-  // "High demand" (503), rate limits (429) and blips (500) are usually short: try the lighter
-  // Flash model once before falling back to the rules planner.
-  if ([429, 500, 503].includes(res.status)) {
-    console.warn(`[gemini] ${model} returned ${res.status}, trying gemini-flash-lite-latest`);
-    res = await callGemini(key, "gemini-flash-lite-latest", brief(trip, prefs));
-  }
+  if (!res) throw new Error(`Gemini unavailable (${lastErr})`);
   if (!res.ok) throw new Error(`Gemini error ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const j = await res.json();
   const text = (j.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? "").join("");
-  const parsed = JSON.parse(text.replace(/^```json\s*|```$/g, ""));
+  const parsed = firstJson(text);
   const out = clean(parsed, trip, prefs);
   if (out.length < 3) throw new Error("Gemini returned too few usable options");
   return out;

@@ -7,7 +7,7 @@
 
 import { PLACES, distanceKm, type Place } from "./catalogue";
 import { findCity } from "./cities";
-import type { MemberEstimate, MemberFit, Preference, Trip, TripOption, Vote } from "./types";
+import type { DateWindow, MemberEstimate, MemberFit, Preference, Trip, TripOption, Vote } from "./types";
 
 export type Candidate = Omit<TripOption, "id" | "trip_id" | "rank" | "fit" | "group_score" | "created_at" | "image">;
 
@@ -39,7 +39,7 @@ export function groupNights(prefs: Preference[], maxNights: number) {
 // ---------- per-person fit ----------
 // `reasons` are shown to the whole group, so budget and won't-do details are folded into one
 // neutral line. `mine` holds the full detail and is only ever sent to that person (lib/view.ts).
-export function scoreMember(c: Candidate, member: string, pref: Preference | undefined): MemberFit {
+export function scoreMember(c: Candidate, member: string, pref: Preference | undefined, win?: DateWindow): MemberFit {
   if (!pref) return { level: "stretch", score: 50, reasons: ["Hasn't shared preferences yet"], mine: [] };
   const reasons: string[] = [];
   const mine: string[] = [];
@@ -54,6 +54,10 @@ export function scoreMember(c: Candidate, member: string, pref: Preference | und
   } else if ((pref.maybe_windows ?? []).includes(c.window_id)) {
     soft = true;
     reasons.push("Dates might work");
+  } else if (win?.added_at && pref.updated_at < win.added_at) {
+    // Someone suggested these dates after this person answered: unknown, not a no.
+    soft = true;
+    reasons.push("Hasn't answered these dates yet");
   } else {
     hardFail = true;
     reasons.push("Not free on these dates");
@@ -124,7 +128,8 @@ export function rankCandidates(trip: Trip, prefs: Preference[], cands: Candidate
   const byMember = new Map(prefs.map((p) => [p.member, p]));
   const scored = cands.map((c) => {
     const fit: Record<string, MemberFit> = {};
-    for (const m of trip.members) fit[m] = scoreMember(c, m, byMember.get(m));
+    const win = trip.date_windows.find((w) => w.id === c.window_id);
+    for (const m of trip.members) fit[m] = scoreMember(c, m, byMember.get(m), win);
     const fits = Object.values(fit);
     const noCount = fits.filter((f) => f.level === "no").length;
     const avg = fits.reduce((s, f) => s + f.score, 0) / fits.length;

@@ -1,5 +1,5 @@
 // CONTEXT + PROCESSING + AI: turn everyone's preferences into the top 3 options.
-// Gate: runs when everyone has submitted - or, after the deadline, when the organiser forces it.
+// Gate: runs when everyone has submitted - or whenever the organiser chooses to go ahead with whoever has answered.
 import { getStore } from "@/lib/store";
 import { allSubmitted, fail, json, safe } from "@/lib/view";
 import { rankCandidates, rulesCandidates, type Candidate } from "@/lib/engine";
@@ -18,14 +18,12 @@ async function handle(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const b = await req.json().catch(() => ({}));
   const prefs = await store.getPreferences(id);
   const isAdmin = b?.admin_token && b.admin_token === trip.admin_token;
-  const deadlinePassed = new Date(trip.deadline).getTime() < Date.now();
 
   // After a reopen, only the organiser rebuilds (so the first edit doesn't instantly regenerate).
   if (trip.status === "reopened" && !isAdmin) return fail("Waiting for the organiser to rebuild the options", 409);
   if (trip.status === "reopened" && prefs.length < 2) return fail("Need at least 2 people's preferences", 409);
   if (trip.status === "collecting" && !allSubmitted(trip, prefs)) {
     if (!isAdmin) return fail("Waiting for everyone to submit", 409);
-    if (!deadlinePassed) return fail("Deadline hasn't passed yet", 409);
     if (prefs.length < 2) return fail("Need at least 2 people's preferences", 409);
   }
 
@@ -47,9 +45,19 @@ async function handle(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const fresh = await store.getTrip(id);
   if (fresh?.status !== "collecting" && fresh?.status !== "reopened") return json({ ok: true, source: options[0]?.source, note: "already generated" });
 
-  await store.clearVotes(id);
-  await store.replaceOptions(id, options);
-  await store.updateTrip(id, { status: "options" });
+  try {
+    await store.clearVotes(id);
+    await store.replaceOptions(id, options);
+    await store.updateTrip(id, { status: "options" });
+  } catch (e) {
+    // Two phones building at the same moment can collide on the insert. If the other one's
+    // options landed, that's a success, not an error.
+    if ((await store.getOptions(id)).length) {
+      await store.updateTrip(id, { status: "options" });
+      return json({ ok: true, note: "already generated" });
+    }
+    throw e;
+  }
   return json({ ok: true, source: options[0]?.source, note });
 }
 

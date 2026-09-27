@@ -22,8 +22,35 @@ async function handle(req: Request, ctx: { params: Promise<{ id: string }> }) {
   if (existing && existing.edit_token !== b.edit_token)
     return fail(`${member} has already submitted from another device. Ask ${trip.organiser} if this is a mistake.`, 403);
 
+  // Anyone can suggest extra dates while answers are open. They join the shared list so the
+  // whole group can answer them, and count as "Can go" for the person who suggested them.
+  const suggestedIds: string[] = [];
+  if (Array.isArray(b.new_windows) && b.new_windows.length && (trip.status === "collecting" || trip.status === "reopened")) {
+    const fresh = (await store.getTrip(id)) ?? trip; // re-read so two people suggesting at once don't clobber each other
+    const windows = [...fresh.date_windows];
+    const today = new Date().toISOString().slice(0, 10);
+    let next = Math.max(0, ...windows.map((w) => Number(w.id.slice(1)) || 0)) + 1;
+    for (const w of b.new_windows as any[]) {
+      if (windows.length >= 6) break;
+      const start = String(w?.start ?? "").slice(0, 10);
+      const end = String(w?.end ?? "").slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || end < start || end < today) continue;
+      const dup = windows.find((x) => x.start === start && x.end === end);
+      if (dup) { suggestedIds.push(dup.id); continue; }
+      const win = { id: `w${next++}`, label: String(w.label || "Suggested dates").slice(0, 40), start, end, added_by: member, added_at: new Date().toISOString() };
+      windows.push(win);
+      suggestedIds.push(win.id);
+    }
+    if (windows.length !== fresh.date_windows.length) {
+      await store.updateTrip(id, { date_windows: windows });
+      trip.date_windows = windows;
+    }
+  }
+
   const windowIds = new Set(trip.date_windows.map((w) => w.id));
-  const available: string[] = (Array.isArray(b.available_windows) ? b.available_windows : []).filter((w: string) => windowIds.has(w));
+  const available: string[] = [
+    ...new Set([...(Array.isArray(b.available_windows) ? b.available_windows : []), ...suggestedIds]),
+  ].filter((w: string) => windowIds.has(w));
   const maybe: string[] = (Array.isArray(b.maybe_windows) ? b.maybe_windows : []).filter(
     (w: string) => windowIds.has(w) && !available.includes(w)
   );

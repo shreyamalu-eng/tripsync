@@ -80,12 +80,13 @@ class LocalStore implements Store {
   kind = "local" as const;
   file = path.join(process.cwd(), ".data", "db.json");
   mem: LocalDB | null = null;
+  // Re-read the file every time: in dev each API route can hold its own copy of this module,
+  // so a cached copy would go stale. Falls back to memory where the disk is read-only.
   private load(): LocalDB {
-    if (this.mem) return this.mem;
     try {
       this.mem = JSON.parse(fs.readFileSync(this.file, "utf8"));
     } catch {
-      this.mem = { trips: [], preferences: [], options: [], votes: [] };
+      this.mem ??= { trips: [], preferences: [], options: [], votes: [] };
     }
     return this.mem!;
   }

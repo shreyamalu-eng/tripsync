@@ -24,7 +24,8 @@ Next.js 16 (App Router, TS) · Supabase (server-side only, RLS on) · Gemini Fla
 ## Rules that must not break
 - Never send budgets, won't-dos, or other people's cost estimates to the browser.
 - The app never picks the trip. It locks only when everyone is in (or the organiser locks with a majority in and zero "can't").
-- Options unlock only when all members have answered (or after the deadline, by the organiser).
+- Options unlock only when all members have answered, or when the organiser chooses to go ahead (at least 2 answers, any time).
+- Anyone can suggest extra date windows (max 6 total) while answers are open. People who answered before a window was added count as "hasn't answered", not "can't".
 - Keys only in `.env.local` / Vercel env vars. Never in code.
 - The UX click budget: a friend goes from opening the link to submitting in about 10 taps with no typing. Don't add required text fields.
 - After a reopen (`status: "reopened"`) only the organiser rebuilds options, so the first edit doesn't instantly regenerate them.

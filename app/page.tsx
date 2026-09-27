@@ -121,7 +121,7 @@ export default function Home() {
             ))}
           </div>
           <p className="tiny muted" style={{ marginTop: 10 }}>
-            Due {fmtDeadline(deadlineFor(days))}. Options unlock the moment everyone&apos;s in. After the deadline you can go ahead with whoever has answered.
+            Due {fmtDeadline(deadlineFor(days))}. Options unlock the moment everyone&apos;s in. Friends can suggest extra dates too. You can go ahead early with whoever has answered.
           </p>
         </div>
         {err && <div className="error">{err}</div>}

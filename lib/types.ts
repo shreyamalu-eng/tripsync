@@ -5,6 +5,8 @@ export type DateWindow = {
   label: string; // e.g. "Diwali long weekend"
   start: string; // ISO date "2026-11-06"
   end: string; // ISO date "2026-11-09"
+  added_by?: string; // set when a friend (not the organiser at setup) suggested these dates
+  added_at?: string; // ISO datetime; people who answered before this haven't seen these dates
 };
 
 export type TripStatus = "collecting" | "reopened" | "options" | "decided";

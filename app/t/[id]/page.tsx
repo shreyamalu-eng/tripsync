@@ -11,7 +11,7 @@ import { Matrix, OptionCard, type Opt } from "@/components/Options";
 import { Avatar, Ring, Scene, sceneFor, useToast, safeGet, safeSet, safeDel, waLink } from "@/components/ui";
 import { addDays, rangeLabel } from "@/lib/holidays";
 
-type W = { id: string; label: string; start: string; end: string };
+type W = { id: string; label: string; start: string; end: string; added_by?: string; added_at?: string };
 type State = {
   trip: { id: string; name: string; organiser: string; members: string[]; date_windows: W[]; deadline: string; status: "collecting" | "reopened" | "options" | "decided"; decided_option_id: string | null };
   submitted: { name: string; done: boolean }[];
@@ -19,7 +19,7 @@ type State = {
   date_coverage: { window_id: string; free: string[]; maybe: string[] }[];
   options: Opt[];
   me: null | {
-    member: string; origin_city: string; origin_lat: number | null; origin_lon: number | null; budget_max: number;
+    member: string; updated_at?: string; origin_city: string; origin_lat: number | null; origin_lon: number | null; budget_max: number;
     available_windows: string[]; maybe_windows: string[]; trip_nights: number; destination_types: string[]; wont_do: string[]; notes: string;
     my_votes: Record<string, "in" | "cant">;
   };
@@ -109,9 +109,12 @@ export default function TripPage() {
         body: JSON.stringify(asAdmin ? { admin_token: admin } : {}),
       });
       // 409 means someone else already built them (or it isn't time yet): just refresh.
-      if (!r.ok && r.status !== 409) setErr("Couldn't build the options. Check your connection and try again.");
+      if (!r.ok && r.status !== 409) throw new Error();
     } catch {
-      setErr("Couldn't build the options. Check your connection and try again.");
+      // Another phone may have built them while this one failed: only complain if there are still no options.
+      const st = await fetch(`/api/trips/${id}`, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
+      if (!st?.trip || st.trip.status === "collecting" || st.trip.status === "reopened")
+        setErr("Couldn't build the options. Check your connection and try again.");
     } finally { setBuilding(false); load(); }
   }, [id, admin, load]);
 
@@ -311,6 +314,12 @@ export default function TripPage() {
           )}
         </div>
 
+        {s.me && trip.date_windows.some((w) => w.added_at && s.me!.updated_at && w.added_at > s.me!.updated_at) && (
+          <div className="note between" style={{ gap: 10 }}>
+            <span><b>New dates suggested</b> by {[...new Set(trip.date_windows.filter((w) => w.added_at && w.added_at > s.me!.updated_at!).map((w) => w.added_by))].join(", ")}. Do they work for you?</span>
+            <button className="btn sm primary" onClick={() => setEditing(true)}>Answer</button>
+          </div>
+        )}
         {s.me ? (
           <div className="card flat between">
             <div><b>Your answers are in ✓</b><div className="tiny muted">Change anything until the options are out.</div></div>
@@ -330,7 +339,7 @@ export default function TripPage() {
               const n = trip.members.length;
               return (
                 <div className="heat-row" key={w.id}>
-                  <span className="small"><b>{w.label}</b> <span className="muted">· {rangeLabel(w.start, w.end)}</span></span>
+                  <span className="small"><b>{w.label}</b> <span className="muted">· {rangeLabel(w.start, w.end)}{w.added_by ? ` · from ${w.added_by}` : ""}</span></span>
                   <span className="tiny muted">{y} can{m ? ` · ${m} maybe` : ""}</span>
                   <div className="heat-bar"><div className="y" style={{ width: `${(y / n) * 100}%` }} /><div className="m" style={{ width: `${(m / n) * 100}%` }} /></div>
                 </div>
@@ -357,11 +366,14 @@ export default function TripPage() {
           <div className="card flat">
             <h3><Clock3 size={15} style={{ verticalAlign: -2 }} /> Organiser</h3>
             <p className="small muted">
-              {s.deadline_passed
-                ? `The deadline has passed. You can go ahead with the ${doneCount} who answered.`
-                : `If someone goes quiet, after ${fmtDue(trip.deadline)} you can go ahead with whoever has answered.`}
+              {doneCount < 2
+                ? "Once at least 2 people have answered, you can go ahead without waiting for the rest."
+                : `Don't want to wait? Go ahead now with the ${doneCount} who answered. ${pending.length ? `${pending.join(", ")} can still join and vote after.` : ""}`}
             </p>
-            <button className="btn soft sm" style={{ marginTop: 8 }} disabled={busy || !s.deadline_passed || doneCount < 2} onClick={() => generate(true)}>
+            <button className="btn soft sm" style={{ marginTop: 8 }} disabled={busy || doneCount < 2} onClick={() => {
+              if (pending.length && !window.confirm(`Build the options now with ${doneCount} people? ${pending.join(", ")} haven't answered yet.`)) return;
+              generate(true);
+            }}>
               <Sparkles size={14} /> Go ahead with {doneCount} {doneCount === 1 ? "person" : "people"}
             </button>
             {resetPanel}

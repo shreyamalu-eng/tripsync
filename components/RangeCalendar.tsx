@@ -13,12 +13,18 @@ const SWATCH = ["#2d5a44", "#86b33a", "#3a7ca0", "#c07a2c", "#7a5aa6", "#b0443a"
 const DOW = ["M", "T", "W", "T", "F", "S", "S"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-export default function RangeCalendar({ windows, onChange, max = 6 }: { windows: Win[]; onChange: (w: Win[]) => void; max?: number }) {
+export default function RangeCalendar({ windows, onChange, max = 6, taken = [] }: { windows: Win[]; onChange: (w: Win[]) => void; max?: number; taken?: { start: string; end: string }[] }) {
   const today = toISO(new Date());
   const [view, setView] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
   const [pending, setPending] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
-  const suggestions = useMemo(() => longWeekends(today, 10).slice(0, 10), [today]);
+  // Don't suggest long weekends that are already on the trip's list.
+  const takenKey = taken.map((t) => t.start + t.end).join();
+  const suggestions = useMemo(
+    () => longWeekends(today, 10).filter((s) => !taken.some((t) => t.start === s.start && t.end === s.end)).slice(0, 10),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [today, takenKey]
+  );
 
   const monthOffset = (view.y - new Date().getFullYear()) * 12 + view.m - new Date().getMonth();
   const days = useMemo(() => {

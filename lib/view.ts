@@ -74,6 +74,7 @@ export async function publicState(trip: Trip, who?: { member?: string | null; to
           origin_lat: mine.origin_lat ?? null,
           origin_lon: mine.origin_lon ?? null,
           maybe_windows: mine.maybe_windows ?? [],
+          updated_at: mine.updated_at,
           budget_max: mine.budget_max,
           available_windows: mine.available_windows,
           trip_nights: mine.trip_nights,
