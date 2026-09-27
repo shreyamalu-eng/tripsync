@@ -1,7 +1,7 @@
 "use client";
 // TRIGGER: landing + organiser setup on one screen (who · when · deadline) → one link.
 import { useRef, useState } from "react";
-import { Users, CalendarRange, Sparkles, ArrowRight, Loader2, Lock, Vote, Clock3, Link2 } from "lucide-react";
+import { Users, CalendarRange, Sparkles, ArrowRight, Loader2, Lock, Vote, Clock3, Link2, Globe } from "lucide-react";
 import RangeCalendar, { type Win } from "@/components/RangeCalendar";
 import NameChips from "@/components/NameChips";
 import { Avatar, safeSet } from "@/components/ui";
@@ -29,6 +29,7 @@ export default function Home() {
   const [friends, setFriends] = useState<string[]>([]);
   const [windows, setWindows] = useState<Win[]>([]);
   const [dl, setDl] = useState("2d");
+  const [abroad, setAbroad] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
@@ -58,6 +59,7 @@ export default function Home() {
         members: [org, ...friends],
         date_windows: windows,
         deadline: deadlineFor(days).toISOString(),
+        abroad,
       }),
     });
     const j = await res.json().catch(() => ({}));
@@ -68,7 +70,8 @@ export default function Home() {
   }
 
   return (
-    <>
+    <div className="landing">
+      <div className="land-left">
       <section className="hero">
         <img className="bg" src={HERO.big} alt="" />
         <div className="glass-row">
@@ -119,6 +122,9 @@ export default function Home() {
         ))}
       </div>
 
+      </div>
+
+      <div className="land-right">
       <div ref={formRef} style={{ scrollMarginTop: 70 }}>
         <p className="eyebrow" style={{ marginTop: 26 }}>Set up in under a minute</p>
         <h2 style={{ fontSize: 28, letterSpacing: "-0.035em" }}>Start your trip</h2>
@@ -151,10 +157,19 @@ export default function Home() {
             Due {fmtDeadline(deadlineFor(days))}. Options unlock the moment everyone&apos;s in. Friends can suggest extra dates too. You can go ahead early with whoever has answered.
           </p>
         </div>
+        <label className="card switch-card">
+          <Globe size={22} color="var(--forest-2)" style={{ flex: "none" }} />
+          <span className="grow">
+            <h3>Include trips abroad?</h3>
+            <span className="small muted">Everyone gets asked if they&apos;re open to it and have a passport.</span>
+          </span>
+          <input type="checkbox" className="switch" checked={abroad} onChange={(e) => setAbroad(e.target.checked)} aria-label="Include trips abroad" />
+        </label>
         {err && <div className="error">{err}</div>}
       </div>
 
       <p className="foot">TripSync suggests. Your group decides. Nothing is ever booked for you.</p>
+      </div>
 
       <div className="actionbar">
         <div className="actionbar-in">
@@ -163,6 +178,6 @@ export default function Home() {
           </button>
         </div>
       </div>
-    </>
+    </div>
   );
 }

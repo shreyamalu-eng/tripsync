@@ -4,12 +4,31 @@
 import crypto from "crypto";
 import { getStore } from "./store";
 import { tally, windowCoverage } from "./engine";
+import { findCity } from "./cities";
+import { publicText } from "./gemini";
 import type { Preference, Trip } from "./types";
 
 export const newId = (n = 8) => crypto.randomBytes(n).toString("base64url").slice(0, n);
 export const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
 export const fail = (msg: string, status = 400) => json({ error: msg }, status);
+
+function groupRange(est: Record<string, { cost_min: number; cost_max: number }>) {
+  const v = Object.values(est ?? {}).filter((e) => e && Number.isFinite(e.cost_min));
+  return v.length ? { min: Math.min(...v.map((e) => e.cost_min)), max: Math.max(...v.map((e) => e.cost_max)) } : null;
+}
+
+function originsFor(prefs: Preference[]) {
+  const seen = new Map<string, { city: string; lat: number; lon: number }>();
+  for (const p of prefs) {
+    const c = findCity(p.origin_city);
+    // City-level coordinates only (never someone's exact location).
+    const lat = c?.lat ?? (p.origin_lat != null ? Math.round(p.origin_lat * 10) / 10 : null);
+    const lon = c?.lon ?? (p.origin_lon != null ? Math.round(p.origin_lon * 10) / 10 : null);
+    if (lat != null && lon != null && !seen.has(p.origin_city.toLowerCase())) seen.set(p.origin_city.toLowerCase(), { city: p.origin_city, lat, lon });
+  }
+  return [...seen.values()];
+}
 
 export function allSubmitted(trip: Trip, prefs: Preference[]) {
   return trip.members.every((m) => prefs.some((p) => p.member === m));
@@ -37,6 +56,7 @@ export async function publicState(trip: Trip, who?: { member?: string | null; to
       deadline: trip.deadline,
       status: trip.status,
       decided_option_id: trip.decided_option_id,
+      abroad: trip.settings?.abroad !== false, // older trips (no setting) keep asking
     },
     submitted: trip.members.map((m) => ({ name: m, done: prefs.some((p) => p.member === m) })),
     all_submitted: allSubmitted(trip, prefs),
@@ -49,8 +69,9 @@ export async function publicState(trip: Trip, who?: { member?: string | null; to
       region: o.region,
       window_id: o.window_id,
       nights: o.nights,
-      summary: o.summary,
-      why: o.why,
+      // Shared text never talks money (also cleans options saved before this rule existed).
+      summary: publicText(o.summary, 160),
+      why: publicText(o.why, 300),
       tags: o.tags,
       group_score: o.group_score,
       image: o.image ?? null,
@@ -60,6 +81,13 @@ export async function publicState(trip: Trip, who?: { member?: string | null; to
       international: !!o.international,
       visa: !!o.visa,
       suggested_by: o.suggested_by ?? [],
+      lat: o.lat ?? null,
+      lon: o.lon ?? null,
+      season: o.season ? publicText(o.season, 140) || null : null,
+      // Group cost range (lowest to highest estimate across people): safe, nobody's own number.
+      cost_range: groupRange(o.estimates),
+      // Home cities for the "getting there" map: city names only, never who lives where.
+      origins: originsFor(prefs),
       // Levels + neutral reasons for everyone; the private detail only for the viewer's own row.
       fit: Object.fromEntries(
         Object.entries(o.fit).map(([m, f]) => [
@@ -87,6 +115,10 @@ export async function publicState(trip: Trip, who?: { member?: string | null; to
           styles: mine.styles ?? [],
           must_haves: mine.must_haves ?? [],
           places: mine.places ?? [],
+          budget_min: mine.budget_min ?? null,
+          pace: mine.pace ?? null,
+          stay: mine.stay ?? null,
+          passport: !!mine.passport,
           notes: mine.notes,
           my_votes: Object.fromEntries(votes.filter((v) => v.member === mine.member).map((v) => [v.option_id, v.vote])),
         }

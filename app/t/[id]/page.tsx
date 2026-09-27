@@ -7,14 +7,14 @@ import {
   Copy, MessageCircle, ArrowRight, Pencil, Loader2, Lock, CalendarPlus, Share2, RotateCcw, PartyPopper, Clock3, Sparkles, Info,
 } from "lucide-react";
 import PrefWizard from "@/components/PrefWizard";
-import { Matrix, OptionCard, type Opt } from "@/components/Options";
+import { Matrix, MapSection, OptionCard, type Opt } from "@/components/Options";
 import { Avatar, Ring, useToast, safeGet, safeSet, safeDel, waLink } from "@/components/ui";
 import { addDays, rangeLabel } from "@/lib/holidays";
 import { bannerFor, photoForTags } from "@/lib/photos";
 
 type W = { id: string; label: string; start: string; end: string; added_by?: string; added_at?: string };
 type State = {
-  trip: { id: string; name: string; organiser: string; members: string[]; date_windows: W[]; deadline: string; status: "collecting" | "reopened" | "options" | "decided"; decided_option_id: string | null };
+  trip: { id: string; name: string; organiser: string; members: string[]; date_windows: W[]; deadline: string; status: "collecting" | "reopened" | "options" | "decided"; decided_option_id: string | null; abroad?: boolean };
   submitted: { name: string; done: boolean }[];
   all_submitted: boolean; deadline_passed: boolean;
   date_coverage: { window_id: string; free: string[]; maybe: string[] }[];
@@ -158,7 +158,8 @@ export default function TripPage() {
 
   // The private 3-step form. Also used by a late joiner once options are out, so they can vote.
   const wizard = (who: Who) => (
-    <>
+    <div className="wiz">
+      <aside>
       {err && <div className="error">{err}</div>}
       <div className="banner compact">
         <img className="bg" src={banner.src} alt="" />
@@ -172,6 +173,8 @@ export default function TripPage() {
         <p className="meta">{trip.organiser === who.member ? `Your trip · ${trip.members.length} people` : `${trip.organiser}'s trip · ${trip.members.length} people`}</p>
       </div>
       {trip.status === "options" && <div className="note">The options are already out. Add your answers so you can vote.</div>}
+      </aside>
+      <div>
       <PrefWizard
         key={who.member + (s.me ? "1" : "0")}
         tripId={id}
@@ -180,6 +183,7 @@ export default function TripPage() {
         initial={s.me}
         busy={busy}
         isOrganiser={isOrganiser}
+        abroadAllowed={trip.abroad !== false}
         onSwitch={switchPerson}
         onSubmit={async (body) => {
           const j = await post("preferences", { ...body, member: who.member, edit_token: who.token });
@@ -191,8 +195,9 @@ export default function TripPage() {
           window.scrollTo({ top: 0 });
         }}
       />
+      </div>
       {toastNode}
-    </>
+    </div>
   );
 
   const banner = bannerFor(trip.id);
@@ -320,6 +325,8 @@ export default function TripPage() {
       <>
         {Header}
         {err && <div className="error">{err}</div>}
+        <div className="wait-grid">
+        <div>
         <div className="card dark">
           <div className="status-card">
             <Ring done={doneCount} total={trip.members.length} />
@@ -356,6 +363,8 @@ export default function TripPage() {
           <div className="note"><Info size={14} style={{ verticalAlign: -2 }} /> {who.member} already answered on another device. Open the link there to edit or vote.</div>
         )}
 
+        </div>
+        <div>
         <div className="card">
           <h3 style={{ marginBottom: 10 }}>Dates so far</h3>
           <div className="heat">
@@ -406,6 +415,8 @@ export default function TripPage() {
             {resetPanel}
           </div>
         )}
+        </div>
+        </div>
         {toastNode}
       </>
     );
@@ -477,14 +488,18 @@ export default function TripPage() {
         </div>
       )}
 
-      {(trip.status !== "decided" || showAll) && <Matrix options={s.options} members={trip.members} me={who?.member} />}
+      {/* Phone: stacked. Laptop: the grid and the map side by side, then the three cards in a row. */}
+      <div className="overview">
+        {(trip.status !== "decided" || showAll) && <Matrix options={s.options} members={trip.members} me={who?.member} />}
+        <MapSection options={s.options} pickId={trip.decided_option_id ?? undefined} />
+      </div>
 
       {trip.status === "decided" && s.options.length > 1 && (
         <button type="button" className="btn ghost block" onClick={() => setShowAll(!showAll)} style={{ margin: "4px 0 8px" }}>
           {showAll ? "Hide the other options" : `See the other ${s.options.length - 1} options`}
         </button>
       )}
-      <div className="opts-grid">
+      <div className={`opts-grid ${trip.status === "decided" && !showAll ? "single" : ""}`}>
         {s.options.filter((o) => trip.status !== "decided" || showAll || o.id === trip.decided_option_id).map((o) => (
           <OptionCard
             key={o.id}

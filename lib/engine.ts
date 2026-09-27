@@ -72,15 +72,20 @@ export function scoreMember(c: Candidate, member: string, pref: Preference | und
   if (c.international) {
     if ((pref.abroad ?? "no") === "no") no("Prefers to stay in India", "Prefers India");
     else if (pref.abroad === "maybe") meh("Unsure about going abroad", "Unsure about abroad");
+    else if (!pref.passport) no("No valid passport yet", "No passport yet");
     if (c.visa && pref.wont_do.includes("visa hassle")) { privateSoft = true; mine.push("Needs a visa, which you'd rather avoid"); }
   }
 
   // Cost, deal-breakers, journey
   const est = c.estimates[member];
   if (est) {
-    if (est.cost_max <= pref.budget_max) {
+    const comfy = pref.budget_min ?? pref.budget_max;
+    if (est.cost_max <= comfy) {
       score += 40;
       mine.push("Within your budget");
+    } else if (est.cost_max <= pref.budget_max) {
+      score += 32;
+      mine.push("Above your comfortable spend, within your max");
     } else if (est.cost_min <= pref.budget_max * 1.15) {
       score += 20;
       privateSoft = true;
@@ -141,6 +146,12 @@ const samePlace = (a: string, b: string) => {
 const baseName = (d: string) =>
   d.toLowerCase().replace(/\(.*?\)/g, " ").replace(/\b(north|south|east|west|old|new|central)\b/g, " ").replace(/\s+/g, " ").trim();
 
+/** Abroad is on the table only if the organiser allowed it and at least half the group is open to it. */
+export function abroadOpen(trip: Trip, prefs: Preference[]) {
+  if (trip.settings?.abroad === false) return false;
+  return prefs.filter((p) => p.abroad === "yes" || p.abroad === "maybe").length >= prefs.length / 2;
+}
+
 export function rankCandidates(trip: Trip, prefs: Preference[], cands: Candidate[]): TripOption[] {
   const byMember = new Map(prefs.map((p) => [p.member, p]));
   const scored = cands.map((c) => {
@@ -166,8 +177,7 @@ export function rankCandidates(trip: Trip, prefs: Preference[], cands: Candidate
   }
   // If the group is open to going abroad, make sure one of the three is abroad (the best one),
   // so it's on the table even when someone would rather stay in India. Their row says why.
-  const openAbroad = prefs.filter((p) => p.abroad === "yes" || p.abroad === "maybe").length >= prefs.length / 2;
-  if (openAbroad && top.length === 3 && !top.some((t) => t.c.international)) {
+  if (abroadOpen(trip, prefs) && top.length === 3 && !top.some((t) => t.c.international)) {
     const best = scored.find((x) => x.c.international && !seen.has(baseName(x.c.destination)));
     if (best) top[2] = best;
   }
@@ -216,9 +226,11 @@ function conflictFor(place: Place, wontDo: string[], hours: number, mode: string
   return null;
 }
 
+const STAY_COST = { budget: 0.75, boutique: 1, comfort: 1.4 } as const;
+
 export function estimateFor(place: Place, pref: Preference, nights: number): MemberEstimate {
   const t = travelFor(pref, place, pref.wont_do);
-  const stay = nights * place.perNight;
+  const stay = nights * place.perNight * STAY_COST[pref.stay ?? "boutique"];
   return {
     cost_min: Math.round((t.cost + stay * 0.8) / 500) * 500,
     cost_max: Math.round((t.cost * 1.25 + stay * 1.2) / 500) * 500,
@@ -230,7 +242,7 @@ export function estimateFor(place: Place, pref: Preference, nights: number): Mem
 export function rulesCandidates(trip: Trip, prefs: Preference[]): Candidate[] {
   const windows = windowCoverage(trip, prefs).slice(0, 2);
   // Only consider going abroad if at least half the group is open to it.
-  const openAbroad = prefs.filter((p) => p.abroad === "yes" || p.abroad === "maybe").length >= prefs.length / 2;
+  const openAbroad = abroadOpen(trip, prefs);
   const out: Candidate[] = [];
   for (const { window } of windows) {
     const nights = groupNights(prefs, windowNights(window.start, window.end));
@@ -251,6 +263,8 @@ export function rulesCandidates(trip: Trip, prefs: Preference[]): Candidate[] {
         international: !!place.intl,
         visa: !!place.visa,
         has: featuresOf(place),
+        lat: place.lat,
+        lon: place.lon,
       });
     }
   }

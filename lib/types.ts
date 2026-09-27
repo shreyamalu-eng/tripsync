@@ -22,6 +22,7 @@ export type Trip = {
   status: TripStatus;
   decided_option_id: string | null;
   created_at: string;
+  settings?: TripSettings; // stored inside date_windows in Supabase (see lib/store.ts)
 };
 
 // One person's private preferences. Never sent to other members.
@@ -45,7 +46,15 @@ export type Preference = {
   styles?: string[]; // kind of trip: relaxed, party, ...
   must_haves?: string[];
   places?: string[]; // places this person already has in mind
+  budget_min?: number; // comfortable spend; budget_max is the absolute max
+  pace?: Pace;
+  stay?: Stay;
+  passport?: boolean; // has a passport valid for 6+ months
 };
+
+export type Pace = "relaxed" | "balanced" | "packed";
+export type Stay = "budget" | "boutique" | "comfort";
+export type TripSettings = { abroad?: boolean }; // organiser's choices at setup
 
 export type Abroad = "yes" | "maybe" | "no";
 
@@ -86,6 +95,9 @@ export type TripOption = {
   visa?: boolean; // Indian passport needs a visa arranged in advance
   has?: string[]; // which must-haves this place offers (when known)
   suggested_by?: string[]; // people who had this place in mind
+  lat?: number; // destination, for the "getting there" map
+  lon?: number;
+  season?: string; // one line on weather/season for those dates
   created_at: string;
 };
 

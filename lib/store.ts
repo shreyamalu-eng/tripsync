@@ -26,10 +26,10 @@ export interface Store {
 // The newer preference fields (abroad, styles, must-haves, places) live inside the existing
 // destination_types text[] column as prefixed entries ("style:party", "place:Bali"), so no
 // database migration is needed. Only this file knows about the packing.
-const PREFIX = { styles: "style:", must_haves: "must:", places: "place:", abroad: "abroad:" } as const;
+const PREFIX = { styles: "style:", must_haves: "must:", places: "place:", abroad: "abroad:", bmin: "bmin:", pace: "pace:", stay: "stay:", passport: "passport:" } as const;
 
 function packPref(p: Preference) {
-  const { abroad, styles = [], must_haves = [], places = [], ...rest } = p;
+  const { abroad, styles = [], must_haves = [], places = [], budget_min, pace, stay, passport, ...rest } = p;
   return {
     ...rest,
     destination_types: [
@@ -38,6 +38,10 @@ function packPref(p: Preference) {
       ...must_haves.map((x) => PREFIX.must_haves + x),
       ...places.map((x) => PREFIX.places + x),
       ...(abroad ? [PREFIX.abroad + abroad] : []),
+      ...(budget_min ? [PREFIX.bmin + budget_min] : []),
+      ...(pace ? [PREFIX.pace + pace] : []),
+      ...(stay ? [PREFIX.stay + stay] : []),
+      ...(passport ? [PREFIX.passport + "1"] : []),
     ],
   };
 }
@@ -53,14 +57,33 @@ function unpackPref(row: Preference): Preference {
     must_haves: pick(PREFIX.must_haves),
     places: pick(PREFIX.places),
     abroad: abroad ?? "no",
+    budget_min: Number(pick(PREFIX.bmin)[0]) || undefined,
+    pace: (pick(PREFIX.pace)[0] as Preference["pace"]) || undefined,
+    stay: (pick(PREFIX.stay)[0] as Preference["stay"]) || undefined,
+    passport: pick(PREFIX.passport)[0] === "1",
   };
+}
+
+// Trip settings ride along as a marker entry at the end of date_windows.
+const SETTINGS = "~settings";
+function packTrip<T extends Partial<Trip>>(t: T) {
+  const { settings, ...rest } = t;
+  if (!("date_windows" in t) && !settings) return rest;
+  const windows = (t.date_windows ?? []).filter((w) => w.id !== SETTINGS);
+  return settings ? { ...rest, date_windows: [...windows, { id: SETTINGS, label: "", start: "", end: "", ...settings }] } : { ...rest, date_windows: windows };
+}
+function unpackTrip(row: Trip): Trip {
+  const all = (row.date_windows ?? []) as (Trip["date_windows"][number] & Record<string, unknown>)[];
+  const s = all.find((w) => w.id === SETTINGS);
+  const { id, label, start, end, ...settings } = s ?? ({} as Record<string, unknown>);
+  return { ...row, date_windows: all.filter((w) => w.id !== SETTINGS), settings: s ? (settings as Trip["settings"]) : {} };
 }
 
 // Same idea for options: the newer option fields ride along inside the estimates jsonb under "~meta".
 const META = "~meta";
 function packOpt(o: TripOption) {
-  const { international, visa, has, suggested_by, ...rest } = o;
-  return { ...rest, estimates: { ...o.estimates, [META]: { international, visa, has, suggested_by } } };
+  const { international, visa, has, suggested_by, lat, lon, season, ...rest } = o;
+  return { ...rest, estimates: { ...o.estimates, [META]: { international, visa, has, suggested_by, lat, lon, season } } };
 }
 function unpackOpt(row: TripOption): TripOption {
   const { [META]: meta, ...estimates } = (row.estimates ?? {}) as Record<string, any>;
@@ -79,14 +102,16 @@ class SupabaseStore implements Store {
     return res.data;
   }
   async createTrip(t: Trip) {
-    this.check(await this.db.from("trips").insert(t));
+    this.check(await this.db.from("trips").insert(packTrip(t)));
   }
   async getTrip(id: string) {
     const rows = this.check(await this.db.from("trips").select("*").eq("id", id).limit(1));
-    return (rows?.[0] as Trip) ?? null;
+    return rows?.[0] ? unpackTrip(rows[0] as Trip) : null;
   }
   async updateTrip(id: string, patch: Partial<Trip>) {
-    this.check(await this.db.from("trips").update(patch).eq("id", id));
+    // Rewriting date_windows must keep the settings marker that lives inside it.
+    if ("date_windows" in patch && !patch.settings) patch = { ...patch, settings: (await this.getTrip(id))?.settings };
+    this.check(await this.db.from("trips").update(packTrip(patch)).eq("id", id));
   }
   async getPreferences(tripId: string) {
     return ((this.check(await this.db.from("preferences").select("*").eq("trip_id", tripId)) ?? []) as Preference[]).map(unpackPref);

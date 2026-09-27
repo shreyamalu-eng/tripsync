@@ -1,7 +1,7 @@
 // Curated destination photos (Wikimedia Commons, hotlinked at Wikimedia's standard thumbnail sizes).
 // Used for the landing page, trip banners, and whenever an option has no photo of its own.
 
-const W = (path: string, w: 960 | 1280 = 960) => {
+const W = (path: string, w: 500 | 960 | 1280 = 960) => {
   const file = path.split("/").pop();
   return `https://upload.wikimedia.org/wikipedia/commons/thumb/${path}/${w}px-${file}`;
 };
@@ -43,3 +43,31 @@ export function bannerFor(id: string): Photo {
   for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return list[h % list.length];
 }
+
+/** Small photos for the "kind of trip" cards (500px thumbnails). */
+export const STYLE_PHOTOS: Record<string, string> = {
+  relaxed: W("2/27/Hammock11.jpg", 500),
+  adventurous: W("e/ea/Paragliding_1350361.jpg", 500),
+  party: W("3/32/Wikipedia_space_ibiza%2803%29.jpg", 500),
+  exploring: W("8/8d/Road_Padum_Zanskar_Range_Jun24_A7CR_00818.jpg", 500),
+  sightseeing: W("1/1d/Taj_Mahal_%28Edited%29.jpeg", 500),
+  "food trail": W("e/e9/Pani_Puri1.JPG", 500),
+  shopping: W("3/31/Turkey_%2868742801%29.jpeg", 500),
+  wellness: W("8/8b/Medicinal_spa_of_Hark%C3%A1ny.jpg", 500),
+  culture: W("2/2c/Kathakali_-Play_with_Kaurava.jpg", 500),
+  photography: W("5/55/Dawki_River%2C_Meghalaya%2C_India.jpg", 500),
+};
+
+/** Popular places people can tap to add to "places in mind". */
+export const PICKS: { place: string; src: string }[] = [
+  { place: "Goa", src: W("9/9c/Palolem_Beach%2C_South_Goa.jpg", 500) },
+  { place: "Manali", src: W("0/03/Manali_City.jpg", 500) },
+  { place: "Udaipur", src: W("6/6f/Evening_view%2C_City_Palace%2C_Udaipur.jpg", 500) },
+  { place: "Pondicherry", src: W("8/8c/Pondicherry-Rock_beach_aerial_view.jpg", 500) },
+  { place: "Ladakh", src: W("4/4d/Leh_City_seen_from_Shanti_Stupa.JPG", 500) },
+  { place: "Kerala", src: W("e/e4/Alappuzha_Boat_Beauty_W.jpg", 500) },
+  { place: "Jaisalmer", src: W("4/46/Jaisalmer_Fort.jpg", 500) },
+  { place: "Meghalaya", src: W("5/55/Dawki_River%2C_Meghalaya%2C_India.jpg", 500) },
+  { place: "Kasol", src: W("a/a2/Kasol_mountain_view.jpg", 500) },
+  { place: "Coorg", src: W("1/17/Tadiandamol_Valley%2C_Western_Ghats.jpg", 500) },
+];

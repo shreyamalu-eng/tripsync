@@ -44,6 +44,7 @@ async function handle(req: Request) {
     status: "collecting",
     decided_option_id: null,
     created_at: new Date().toISOString(),
+    settings: { abroad: b.abroad === true },
   };
   await getStore().createTrip(trip);
   return json({ id: trip.id, admin_token: trip.admin_token });

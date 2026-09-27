@@ -20,10 +20,15 @@ Next.js 16 (App Router, TS) · Supabase (server-side only, RLS on) · Gemini Fla
 - `lib/view.ts`: privacy boundary: what the browser may see
 - `lib/store.ts`: Supabase, or a local JSON file when no keys are set. Newer preference fields (abroad, styles, must-haves, places) are packed into `destination_types` as prefixed entries, and newer option fields into `estimates["~meta"]`, so no migration was needed
 - `lib/photos.ts`: curated Wikimedia photos for the landing page, trip banners and fallbacks
+- `components/TripMap.tsx`: "Getting to X" map (Leaflet + OpenStreetMap tiles). Shows home *cities* only, never who lives where or exact locations
+- `components/BudgetRange.tsx`: two-handle budget (comfortable → absolute max). No tier names
 - `supabase/schema.sql`: run once in Supabase
 
 ## Rules that must not break
 - Never send budgets, won't-dos, or other people's cost estimates to the browser.
+- Text the whole group sees (summary, why, season) never mentions money: `publicText()` in `lib/gemini.ts` strips any such sentence.
+- Abroad trips need the organiser's "Include trips abroad?" switch AND at least half the group open to it.
+- Phone = one column; laptop (≥980px) = side-by-side layouts (`.landing`, `.wiz`, `.wait-grid`, `.overview`, 3-up `.opts-grid`).
 - The app never picks the trip. It locks only when everyone is in (or the organiser locks with a majority in and zero "can't").
 - Options unlock only when all members have answered, or when the organiser chooses to go ahead (at least 2 answers, any time).
 - Going abroad is only suggested when at least half the group is open to it; then one of the three options is abroad. People who said "India only" see "Prefers India" on it.

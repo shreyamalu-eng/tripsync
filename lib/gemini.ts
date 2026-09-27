@@ -2,7 +2,7 @@
 // group and estimate travel/cost per person. It does NOT rank or decide -
 // ranking is done by lib/engine.ts, the decision is made by the group.
 
-import { windowCoverage, windowNights, groupNights, type Candidate } from "./engine";
+import { abroadOpen, windowCoverage, windowNights, groupNights, type Candidate } from "./engine";
 import { DESTINATION_TYPES, MUST_HAVES, TRIP_STYLES, type MemberEstimate, type Preference, type Trip } from "./types";
 
 const API = process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1beta";
@@ -18,14 +18,20 @@ Rules:
   include 1-2 short-haul international destinations (e.g. Thailand, Sri Lanka, Nepal, Bhutan, Vietnam, Bali, Dubai,
   Maldives) that fit the budgets. Mark them "international": true, and "visa": true if an Indian passport holder must
   arrange a visa or e-visa before travelling (visa-free or visa on arrival = false). Everything else in India.
+- If "abroad_allowed" is false, suggest only places in India.
+- "comfortable_budget_inr" is what someone is happy to spend; "max_budget_inr_per_person" is their ceiling.
+- "stay" is budget / boutique / comfort: price stays accordingly. "pace" is relaxed / balanced / packed.
+- Give each destination's "lat" and "lon" (decimal degrees) and a one-line "season" note on weather for those dates.
 - "places_in_mind" are places people already want to go. Include each one that is realistic for the dates and budgets.
 - "styles" is the kind of trip each person wants (relaxed, party, sightseeing, ...). Balance the group, not the majority.
 - "has": which of the group's must-haves the place clearly offers, chosen only from: ${MUST_HAVES.join(", ")}.
+- "summary", "why" and "season" are shown to the WHOLE group. Never mention money, budgets, affordability, costs,
+  or any one person's limits or deal-breakers in them. Talk only about the place and what the group will enjoy.
 - Be realistic. Do not invent festivals, prices you are unsure of, or bookings. These are estimates.
 - tags must come from: ${[...DESTINATION_TYPES, ...TRIP_STYLES].join(", ")}.
 Return ONLY JSON of the form:
 {"candidates":[{"destination":"","region":"","window_id":"","nights":3,"summary":"one line","why":"one or two lines on why it suits this group","tags":[""],
-"international":false,"visa":false,"has":[""],
+"international":false,"visa":false,"has":[""],"lat":0,"lon":0,"season":"",
 "estimates":{"<person name>":{"cost_min":0,"cost_max":0,"travel":"~2h flight","conflict":null}}}]}`;
 
 function brief(trip: Trip, prefs: Preference[]) {
@@ -34,6 +40,7 @@ function brief(trip: Trip, prefs: Preference[]) {
   return JSON.stringify(
     {
       trip: trip.name,
+      abroad_allowed: abroadOpen(trip, prefs),
       suggested_nights: groupNights(prefs, maxN),
       date_windows: cov.map((c) => ({
         ...c.window,
@@ -46,6 +53,10 @@ function brief(trip: Trip, prefs: Preference[]) {
         home_city: p.origin_city,
         home_coords: p.origin_lat != null ? [p.origin_lat, p.origin_lon] : undefined,
         max_budget_inr_per_person: p.budget_max,
+        comfortable_budget_inr: p.budget_min ?? undefined,
+        stay: p.stay ?? undefined,
+        pace: p.pace ?? undefined,
+        has_passport: p.abroad !== "no" ? !!p.passport : undefined,
         preferred_nights: p.trip_nights,
         wants: p.destination_types,
         styles: p.styles?.length ? p.styles : undefined,
@@ -114,6 +125,14 @@ function candidateList(raw: any): any[] {
   return lists.find((l) => l.some((c) => c && typeof c.destination === "string")) ?? [];
 }
 
+// The group sees summary/why/season. Drop any sentence that talks about money or affordability,
+// so nobody's budget can be read between the lines ("budget-friendly for Aisha").
+const MONEY = /budget|afford|cheap|expensive|pric|cost|money|₹|rs\.?\s?\d|inr|splurge|wallet|spend/i;
+export function publicText(text: string, max: number) {
+  const kept = String(text ?? "").split(/(?<=[.!?])\s+/).filter((sentence) => !MONEY.test(sentence));
+  return kept.join(" ").slice(0, max);
+}
+
 function num(x: unknown, fallback = 0) {
   const n = Number(x);
   return Number.isFinite(n) && n >= 0 ? Math.round(n) : fallback;
@@ -144,8 +163,8 @@ function clean(raw: any, trip: Trip, prefs: Preference[]): Candidate[] {
         region: String(c.region ?? "").slice(0, 60),
         window_id: c.window_id,
         nights: Math.max(1, num(c.nights, 3)),
-        summary: String(c.summary ?? "").slice(0, 160),
-        why: String(c.why ?? "").slice(0, 300),
+        summary: publicText(c.summary, 160),
+        why: publicText(c.why, 300),
         tags: (Array.isArray(c.tags) ? c.tags : []).map(String)
           .filter((t: string) => (DESTINATION_TYPES as readonly string[]).includes(t) || (TRIP_STYLES as readonly string[]).includes(t)).slice(0, 6),
         estimates,
@@ -153,6 +172,9 @@ function clean(raw: any, trip: Trip, prefs: Preference[]): Candidate[] {
         international: c.international === true,
         visa: c.international === true && c.visa === true,
         has: Array.isArray(c.has) ? c.has.filter((h: string) => (MUST_HAVES as readonly string[]).includes(h)) : undefined,
+        lat: Number.isFinite(Number(c.lat)) && Math.abs(Number(c.lat)) <= 90 && Number(c.lat) !== 0 ? Number(c.lat) : undefined,
+        lon: Number.isFinite(Number(c.lon)) && Math.abs(Number(c.lon)) <= 180 && Number(c.lon) !== 0 ? Number(c.lon) : undefined,
+        season: c.season ? publicText(c.season, 140) || undefined : undefined,
       };
     });
 }
@@ -192,8 +214,7 @@ export async function geminiCandidates(trip: Trip, prefs: Preference[]): Promise
   const parsed = firstJson(text);
   let out = clean(parsed, trip, prefs);
   // Enforce the abroad rule even if the model ignores it.
-  const openAbroad = prefs.filter((p) => p.abroad === "yes" || p.abroad === "maybe").length >= prefs.length / 2;
-  if (!openAbroad) out = out.filter((c) => !c.international);
+  if (!abroadOpen(trip, prefs)) out = out.filter((c) => !c.international);
   if (out.length < 3) {
     const raw = candidateList(parsed);
     throw new Error(`Gemini returned too few usable options (${out.length} of ${raw.length}; windows ${JSON.stringify(raw.map((c: any) => c?.window_id)).slice(0, 80)})`);

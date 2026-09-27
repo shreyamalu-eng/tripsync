@@ -47,7 +47,8 @@ export default function CityPicker({ value, onChange }: { value: CityValue | nul
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const c = nearestCity(pos.coords.latitude, pos.coords.longitude);
-        onChange({ name: c.name, state: c.state, lat: pos.coords.latitude, lon: pos.coords.longitude });
+        // Save the nearest city's coordinates, never the phone's exact position.
+        onChange({ name: c.name, state: c.state, lat: c.lat, lon: c.lon });
         setLocating(false);
       },
       () => { setLocating(false); setGeoErr("Couldn't get your location. Pick a city below."); },
@@ -60,8 +61,8 @@ export default function CityPicker({ value, onChange }: { value: CityValue | nul
       <div className="city-chosen">
         <MapPin size={18} />
         <div className="grow">
-          {value.name}
-          {value.state && <div className="tiny muted" style={{ fontWeight: 600 }}>{value.state}</div>}
+          <span className="muted" style={{ fontWeight: 600 }}>From</span> {value.name}
+          {value.state && <span className="muted" style={{ fontWeight: 600 }}> · {value.state}</span>}
         </div>
         <button type="button" className="btn sm ghost" onClick={() => onChange(null)}><Pencil size={14} /> Change</button>
       </div>
@@ -104,7 +105,8 @@ export default function CityPicker({ value, onChange }: { value: CityValue | nul
           </div>
         )}
       </div>
-      <div className="chips" style={{ marginTop: 10 }}>
+      <p className="eyebrow" style={{ margin: "16px 0 8px", color: "var(--muted)" }}>Popular</p>
+      <div className="chips">
         {POPULAR_CITIES.map((c) => (
           <button type="button" key={c.name} className="chip" onClick={() => pick(c)}>{c.name}</button>
         ))}

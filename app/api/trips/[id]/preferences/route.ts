@@ -66,6 +66,8 @@ async function handle(req: Request, ctx: { params: Promise<{ id: string }> }) {
 
   if (!origin) return fail("Which city will you travel from?");
   if (!Number.isFinite(budget) || budget < 2000 || budget > 500000) return fail("Enter a budget between ₹2,000 and ₹5,00,000");
+  const bmin = Math.round(Number(b.budget_min));
+  const budgetMin = Number.isFinite(bmin) && bmin >= 1000 && bmin <= budget ? bmin : undefined;
   if (!Number.isFinite(nights) || nights < 1 || nights > 14) return fail("Trip length should be 1 to 14 nights");
 
   const pref: Preference = {
@@ -88,6 +90,10 @@ async function handle(req: Request, ctx: { params: Promise<{ id: string }> }) {
     places: [...new Set((Array.isArray(b.places) ? b.places : [])
       .map((x: unknown) => String(x).replace(/[:<>]/g, "").trim().slice(0, 40)).filter(Boolean))].slice(0, 3) as string[],
     notes: String(b.notes ?? "").slice(0, 300),
+    budget_min: budgetMin,
+    pace: ["relaxed", "balanced", "packed"].includes(b.pace) ? b.pace : undefined,
+    stay: ["budget", "boutique", "comfort"].includes(b.stay) ? b.stay : undefined,
+    passport: b.passport === true,
     updated_at: new Date().toISOString(),
   };
   await store.upsertPreference(pref);
