@@ -3,10 +3,10 @@
 //  - reopen: clear options + votes so people can edit preferences again
 //  - reset: clear one person's answers (someone answered as the wrong person) so they can answer again
 import { getStore } from "@/lib/store";
-import { fail, json } from "@/lib/view";
+import { fail, json, safe } from "@/lib/view";
 import { canLock } from "@/lib/engine";
 
-export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+async function handle(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const store = getStore();
   const trip = await store.getTrip(id);
@@ -39,3 +39,5 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   }
   return fail("Unknown action");
 }
+
+export const POST = safe(handle);

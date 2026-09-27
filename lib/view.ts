@@ -87,3 +87,17 @@ export async function publicState(trip: Trip, who?: { member?: string | null; to
     storage: store.kind,
   };
 }
+
+// Wrap a route so a crash returns a readable JSON error instead of a blank 500.
+// Database messages (e.g. "Invalid API key") are safe to show and make setup problems obvious.
+export function safe<A extends unknown[]>(handler: (...args: A) => Promise<Response>) {
+  return async (...args: A) => {
+    try {
+      return await handler(...args);
+    } catch (e) {
+      const msg = (e as Error)?.message ?? "Unknown error";
+      console.error("[api]", msg);
+      return fail(msg.startsWith("Database error") ? msg : "Server error. Please try again.", 500);
+    }
+  };
+}

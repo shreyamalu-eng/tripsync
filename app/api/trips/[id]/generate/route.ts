@@ -1,14 +1,14 @@
 // CONTEXT + PROCESSING + AI: turn everyone's preferences into the top 3 options.
 // Gate: runs when everyone has submitted - or, after the deadline, when the organiser forces it.
 import { getStore } from "@/lib/store";
-import { allSubmitted, fail, json } from "@/lib/view";
+import { allSubmitted, fail, json, safe } from "@/lib/view";
 import { rankCandidates, rulesCandidates, type Candidate } from "@/lib/engine";
 import { geminiCandidates } from "@/lib/gemini";
 import { destinationImage } from "@/lib/images";
 
 export const maxDuration = 60;
 
-export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+async function handle(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const store = getStore();
   const trip = await store.getTrip(id);
@@ -52,3 +52,5 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   await store.updateTrip(id, { status: "options" });
   return json({ ok: true, source: options[0]?.source, note });
 }
+
+export const POST = safe(handle);

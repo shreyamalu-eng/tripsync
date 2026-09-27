@@ -1,9 +1,9 @@
 // TRIGGER: the organiser creates a trip and gets one shareable link.
 import { getStore } from "@/lib/store";
-import { fail, json, newId } from "@/lib/view";
+import { fail, json, newId, safe } from "@/lib/view";
 import type { DateWindow, Trip } from "@/lib/types";
 
-export async function POST(req: Request) {
+async function handle(req: Request) {
   const b = await req.json().catch(() => null);
   if (!b) return fail("Invalid request");
 
@@ -48,3 +48,5 @@ export async function POST(req: Request) {
   await getStore().createTrip(trip);
   return json({ id: trip.id, admin_token: trip.admin_token });
 }
+
+export const POST = safe(handle);

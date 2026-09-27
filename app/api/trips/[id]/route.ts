@@ -1,8 +1,8 @@
 // Read the trip as the current viewer is allowed to see it.
 import { getStore } from "@/lib/store";
-import { fail, json, publicState } from "@/lib/view";
+import { fail, json, publicState, safe } from "@/lib/view";
 
-export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
+async function handle(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const trip = await getStore().getTrip(id);
   if (!trip) return fail("Trip not found", 404);
@@ -15,3 +15,5 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     })
   );
 }
+
+export const GET = safe(handle);

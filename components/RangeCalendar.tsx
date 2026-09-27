@@ -37,18 +37,22 @@ export default function RangeCalendar({ windows, onChange, max = 6 }: { windows:
     onChange([...windows, { start, end, label: label ?? autoLabel(start, end) }].sort((a, b) => a.start.localeCompare(b.start)));
   }
 
+  // Tap a first day, then a last day. Tap your first day again to cancel it.
+  // Tap any day of a range you already picked (including a long weekend) to remove it and pick again.
   function tap(d: string) {
     if (d < today) return;
     if (!pending) {
       const i = winIndexOf(d);
-      if (i >= 0 && windows[i].start === d && windows[i].end === d) return onChange(windows.filter((_, j) => j !== i));
+      if (i >= 0) return onChange(windows.filter((_, j) => j !== i));
+      if (windows.length >= max) return;
       setPending(d);
       return;
     }
+    setHover(null);
+    if (d === pending) return setPending(null);
     if (d < pending) return setPending(d);
     add(pending, d);
     setPending(null);
-    setHover(null);
   }
 
   const toggleSuggestion = (s: { start: string; end: string; label: string }) => {
@@ -122,8 +126,16 @@ export default function RangeCalendar({ windows, onChange, max = 6 }: { windows:
         <div className="cal-legend">
           <span><i style={{ background: "var(--holiday)" }} />Public holiday</span>
           <span><i style={{ background: "var(--forest-2)" }} />Weekend</span>
-          {pending && <span style={{ color: "var(--forest)", fontWeight: 700 }}>Now tap the last day{pending ? ` (from ${rangeLabel(pending, pending)})` : ""}</span>}
         </div>
+        <p className="tiny" style={{ marginTop: 6, color: pending ? "var(--forest)" : "var(--muted)", fontWeight: pending ? 700 : 500 }}>
+          {pending
+            ? `Now tap the last day (from ${rangeLabel(pending, pending)}). Tap ${fromISO(pending).getDate()} again to cancel.`
+            : windows.length >= max
+              ? `That's ${max} options, the most you can add. Tap a picked range to remove it.`
+              : windows.length
+                ? "Tap a picked range to remove it and choose different days."
+                : "Tap the first day, then the last day."}
+        </p>
       </div>
 
       {windows.length > 0 && (

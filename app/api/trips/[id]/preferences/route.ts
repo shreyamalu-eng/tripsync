@@ -1,9 +1,9 @@
 // INPUT: each person submits (or edits) their private preferences.
 import { getStore } from "@/lib/store";
-import { fail, json, newId } from "@/lib/view";
+import { fail, json, newId, safe } from "@/lib/view";
 import { DESTINATION_TYPES, WONT_DO_OPTIONS, type Preference } from "@/lib/types";
 
-export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+async function handle(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const store = getStore();
   const trip = await store.getTrip(id);
@@ -61,3 +61,5 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   await store.upsertPreference(pref);
   return json({ edit_token: pref.edit_token });
 }
+
+export const POST = safe(handle);

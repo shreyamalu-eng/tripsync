@@ -146,6 +146,9 @@ textarea { min-height: 76px; resize: vertical; }
 .cal-day span.n { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; position: relative; z-index: 1; }
 .cal-day.we span.n { color: var(--forest-2); }
 .cal-day.past { color: #c3c0b4; cursor: default; }
+/* Past days (weekends and holidays too) are all grey. */
+.cal-day.past span.n, .cal-day.past.we span.n, .cal-day.past.hol span.n { color: #c3c0b4; font-weight: 600; }
+.cal-day.past.hol::after { background: #d8d5ca; }
 .cal-day.hol span.n { color: var(--holiday); font-weight: 800; }
 .cal-day.hol::after { content: ""; position: absolute; bottom: 3px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--holiday); z-index: 2; }
 .cal-day.inr::before { content: ""; position: absolute; top: 3px; bottom: 3px; left: 0; right: 0; background: var(--band, var(--moss)); }

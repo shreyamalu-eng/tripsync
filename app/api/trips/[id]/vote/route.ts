@@ -1,10 +1,10 @@
 // HUMAN DECISION: each person marks each option "I'm in" or "Can't do".
 // When everyone is in on one option, it locks - no more changing minds the next day.
 import { getStore } from "@/lib/store";
-import { fail, json } from "@/lib/view";
+import { fail, json, safe } from "@/lib/view";
 import { canLock } from "@/lib/engine";
 
-export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+async function handle(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const store = getStore();
   const trip = await store.getTrip(id);
@@ -34,3 +34,5 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   }
   return json({ ok: true, locked: false });
 }
+
+export const POST = safe(handle);
