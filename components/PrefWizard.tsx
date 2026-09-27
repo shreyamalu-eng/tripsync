@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Check, X, CircleHelp, ArrowLeft, ArrowRight, Lock, Loader2, TreePalm, Mountain, Building2, Landmark, Trees, Tent,
-  Coffee, Music, UtensilsCrossed, Bus, Clock, Plane, Footprints, Snowflake, PartyPopper, BedDouble, Car, Sparkles,
+  Coffee, Music, UtensilsCrossed, Bus, Clock, Plane, Footprints, Snowflake, PartyPopper, BedDouble, Car, Sparkles, CalendarPlus,
 } from "lucide-react";
 import CityPicker, { type CityValue } from "./CityPicker";
 import RangeCalendar, { type Win } from "./RangeCalendar";
@@ -40,7 +40,7 @@ const WONTS: { key: string; label: string; icon: React.ReactNode }[] = [
   { key: "long road trips", label: "Long road trips", icon: <Car size={15} /> },
 ];
 const BUDGETS = [8000, 12000, 15000, 20000, 30000, 50000];
-const STEPS = ["When", "Where & budget", "Vibe"];
+const STEPS = ["Dates", "City & budget", "Vibe"];
 
 export default function PrefWizard(props: {
   tripId: string; member: string; windows: W[]; initial: Initial; busy: boolean; isOrganiser: boolean;
@@ -107,11 +107,14 @@ export default function PrefWizard(props: {
 
   return (
     <div>
-      <div className="stepper-head">
-        <span>Step {step + 1} of 3 · {STEPS[step]}</span>
-        <span className="row" style={{ gap: 4 }}><Check size={14} /> Autosaved</span>
+      <div className="steps" aria-label={`Step ${step + 1} of 3`}>
+        {STEPS.map((l, k) => (
+          <span key={l} className={`step ${k === step ? "on" : k < step ? "done" : ""}`}>
+            {k < step ? <Check size={13} strokeWidth={3} /> : <b>{k + 1}</b>} {l}
+          </span>
+        ))}
       </div>
-      <div className="progress"><div style={{ width: `${((step + 1) / 3) * 100}%` }} /></div>
+      <div className="stepper-head"><span /> <span className="row" style={{ gap: 4 }}><Check size={14} /> Autosaved</span></div>
 
       {step === 0 && (
         <section>
@@ -149,9 +152,11 @@ export default function PrefWizard(props: {
             );
           })}
           {room > 0 && (
-            <div className="card flat" style={{ marginTop: 12 }}>
+            <div className={showCal ? "card flat" : ""} style={{ marginTop: 12 }}>
               {!showCal ? (
-                <button type="button" className="linkbtn" onClick={() => setShowCal(true)}>+ Suggest other dates that work for you</button>
+                <button type="button" className="btn ghost block" onClick={() => setShowCal(true)} style={{ borderStyle: "dashed" }}>
+                  <CalendarPlus size={16} /> Suggest other dates that work for you
+                </button>
               ) : (
                 <>
                   <h3 style={{ marginBottom: 4 }}>Your suggested dates</h3>

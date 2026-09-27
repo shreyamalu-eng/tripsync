@@ -15,7 +15,13 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 
 export default function RangeCalendar({ windows, onChange, max = 6, taken = [] }: { windows: Win[]; onChange: (w: Win[]) => void; max?: number; taken?: { start: string; end: string }[] }) {
   const today = toISO(new Date());
-  const [view, setView] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
+  // Late in the month, open on next month so the first view isn't mostly greyed-out past days.
+  const [view, setView] = useState(() => {
+    const d = new Date();
+    const left = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() - d.getDate();
+    const m = d.getMonth() + (left < 7 ? 1 : 0);
+    return { y: d.getFullYear() + Math.floor(m / 12), m: m % 12 };
+  });
   const [pending, setPending] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
   // Don't suggest long weekends that are already on the trip's list.

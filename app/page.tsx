@@ -1,10 +1,11 @@
 "use client";
 // TRIGGER: landing + organiser setup on one screen (who · when · deadline) → one link.
 import { useRef, useState } from "react";
-import { Users, CalendarRange, Sparkles, ArrowRight, Loader2, Lock, Vote, Clock3 } from "lucide-react";
+import { Users, CalendarRange, Sparkles, ArrowRight, Loader2, Lock, Vote, Clock3, Link2 } from "lucide-react";
 import RangeCalendar, { type Win } from "@/components/RangeCalendar";
 import NameChips from "@/components/NameChips";
-import { Scene, safeSet } from "@/components/ui";
+import { Avatar, safeSet } from "@/components/ui";
+import { HERO, SHOWCASE } from "@/lib/photos";
 
 const DEADLINES = [
   { id: "24h", label: "24 hours", days: 1 },
@@ -31,6 +32,7 @@ export default function Home() {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
+  const howRef = useRef<HTMLDivElement>(null);
 
   const days = DEADLINES.find((d) => d.id === dl)!.days;
   const missing = [
@@ -68,18 +70,43 @@ export default function Home() {
   return (
     <>
       <section className="hero">
-        <Scene kind="hero" />
-        <span className="pill">1,200 messages. Zero plans?</span>
+        <img className="bg" src={HERO.big} alt="" />
+        <div className="glass-row">
+          <span className="glass"><Lock size={13} /> Private answers</span>
+          <span className="glass"><Clock3 size={13} /> 1 minute</span>
+          <span className="glass"><Link2 size={13} /> One link</span>
+        </div>
+        <span className="glass dark" style={{ alignSelf: "flex-start", marginBottom: 14 }}>1,200 messages. Zero plans?</span>
         <h1>Turn group chaos<br />into <span style={{ color: "var(--lime)" }}>one trip.</span></h1>
-        <p style={{ opacity: 0.92, maxWidth: 420 }}>Everyone answers privately through one link. You get three trips that work for the whole group, and you see exactly where each person stands.</p>
-        <div className="row" style={{ marginTop: 14 }}>
+        <p className="lede">Everyone answers privately through one link. You get three trips that work for the whole group, and see exactly where each person stands.</p>
+        <div className="cta">
           <button className="btn primary" onClick={() => formRef.current?.scrollIntoView({ behavior: "smooth" })}>
             Plan a trip <ArrowRight size={17} />
           </button>
+          <button className="btn glassy" onClick={() => howRef.current?.scrollIntoView({ behavior: "smooth" })}>How it works</button>
         </div>
+        <div className="peek glass dark">
+          <span className="stackav">{["Riya", "Siddharth", "Karan", "Aisha", "Preethi"].map((n) => <Avatar key={n} name={n} size="sm" />)}</span>
+          <span className="small" style={{ fontWeight: 650 }}>5 friends · 3 trips · 1 decision</span>
+        </div>
+        <span className="credit">{HERO.place}, {HERO.region} · Wikimedia Commons</span>
       </section>
 
-      <div className="how">
+      <div className="section-head">
+        <h2>Where groups are heading</h2>
+      </div>
+      <div className="showcase">
+        {SHOWCASE.map((p) => (
+          <div className="shot" key={p.place}>
+            <img src={p.src} alt={p.place} loading="lazy" />
+            <span className="glass dark">{p.tags[0][0].toUpperCase() + p.tags[0].slice(1)}</span>
+            <b>{p.place}</b>
+            <span className="tiny" style={{ opacity: 0.85 }}>{p.region}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="how" ref={howRef} style={{ scrollMarginTop: 70 }}>
         {[
           { ic: <Lock size={18} />, t: "Everyone answers in private", d: "Dates, city, budget, vibe. About a minute, no typing. Nobody sees anyone's budget." },
           { ic: <Sparkles size={18} />, t: "We find the overlap", d: "Three options that work for everyone, not just the loudest in the chat." },
@@ -94,7 +121,7 @@ export default function Home() {
 
       <div ref={formRef} style={{ scrollMarginTop: 70 }}>
         <p className="eyebrow" style={{ marginTop: 26 }}>Set up in under a minute</p>
-        <h2 style={{ fontSize: 24 }}>Start your trip</h2>
+        <h2 style={{ fontSize: 28, letterSpacing: "-0.035em" }}>Start your trip</h2>
 
         <div className="card">
           <div className="section-title"><span className="step-num">1</span><h3><Users size={16} style={{ verticalAlign: -2 }} /> Who&apos;s going?</h3></div>

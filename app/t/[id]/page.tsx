@@ -8,8 +8,9 @@ import {
 } from "lucide-react";
 import PrefWizard from "@/components/PrefWizard";
 import { Matrix, OptionCard, type Opt } from "@/components/Options";
-import { Avatar, Ring, Scene, sceneFor, useToast, safeGet, safeSet, safeDel, waLink } from "@/components/ui";
+import { Avatar, Ring, useToast, safeGet, safeSet, safeDel, waLink } from "@/components/ui";
 import { addDays, rangeLabel } from "@/lib/holidays";
+import { bannerFor, photoForTags } from "@/lib/photos";
 
 type W = { id: string; label: string; start: string; end: string; added_by?: string; added_at?: string };
 type State = {
@@ -56,6 +57,7 @@ export default function TripPage() {
   const [editing, setEditing] = useState(false);
   const [shared, setShared] = useState(true);
   const [building, setBuilding] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const genTried = useRef(false);
   const { toast, node: toastNode } = useToast();
 
@@ -158,6 +160,17 @@ export default function TripPage() {
   const wizard = (who: Who) => (
     <>
       {err && <div className="error">{err}</div>}
+      <div className="banner compact">
+        <img className="bg" src={banner.src} alt="" />
+        <div className="top-row">
+          <span className="glass dark"><Lock size={12} /> Private answers</span>
+          <button className="chip person" onClick={switchPerson} title="Switch person" style={{ flex: "none" }}>
+            <Avatar name={who.member} size="sm" /> {who.member}
+          </button>
+        </div>
+        <h1>{trip.name}</h1>
+        <p className="meta">{trip.organiser === who.member ? `Your trip · ${trip.members.length} people` : `${trip.organiser}'s trip · ${trip.members.length} people`}</p>
+      </div>
       {trip.status === "options" && <div className="note">The options are already out. Add your answers so you can vote.</div>}
       <PrefWizard
         key={who.member + (s.me ? "1" : "0")}
@@ -182,19 +195,33 @@ export default function TripPage() {
     </>
   );
 
-  const Header = (
-    <div style={{ margin: "10px 0 6px" }}>
-      <div className="between">
-        <div>
-          <p className="eyebrow">{trip.status === "decided" ? "Decided" : trip.status === "options" ? "Time to decide" : reopened ? "Answers reopened" : "Collecting answers"}</p>
-          <h1 style={{ fontSize: 26, margin: "2px 0" }}>{trip.name}</h1>
-          <p className="tiny muted">By {trip.organiser}{collecting ? ` · answers due ${fmtDue(trip.deadline)}` : ""}{s.storage === "local" ? " · local test mode" : ""}</p>
-        </div>
+  const banner = bannerFor(trip.id);
+  const decidedOpt = trip.status === "decided" ? s.options.find((o) => o.id === trip.decided_option_id) : null;
+  const Header = decidedOpt ? (
+    // Once decided, the celebration card below is the header.
+    <div className="between" style={{ margin: "10px 0 4px" }}>
+      <div><p className="eyebrow">Decided</p><h2 style={{ margin: 0 }}>{trip.name}</h2></div>
+      {who && <button className="chip person" onClick={switchPerson} title="Switch person"><Avatar name={who.member} size="sm" /> {who.member}</button>}
+    </div>
+  ) : (
+    <div className="banner">
+      <img className="bg" src={banner.src} alt="" />
+      <div className="top-row">
+        <span className={`glass ${trip.status === "options" ? "lime" : "dark"}`}>
+          {trip.status === "options" ? "Time to decide" : reopened ? "Answers reopened" : "Collecting answers"}
+        </span>
         {who && (
           <button className="chip person" onClick={switchPerson} title="Switch person" style={{ flex: "none" }}>
             <Avatar name={who.member} size="sm" /> {who.member}
           </button>
         )}
+      </div>
+      <h1>{trip.name}</h1>
+      <div className="between">
+        <p className="meta">By {trip.organiser}{collecting ? ` · due ${fmtDue(trip.deadline)}` : ""}{s.storage === "local" ? " · local test mode" : ""}</p>
+        <span className="stackav" title={`${doneCount} of ${trip.members.length} answered`}>
+          {trip.members.slice(0, 5).map((m) => <Avatar key={m} name={m} size="sm" dim={!s.submitted.find((x) => x.name === m)?.done} />)}
+        </span>
       </div>
     </div>
   );
@@ -293,7 +320,7 @@ export default function TripPage() {
       <>
         {Header}
         {err && <div className="error">{err}</div>}
-        <div className="card">
+        <div className="card dark">
           <div className="status-card">
             <Ring done={doneCount} total={trip.members.length} />
             <div>
@@ -303,13 +330,13 @@ export default function TripPage() {
           </div>
           <div className="avatars" style={{ marginTop: 16 }}>
             {s.submitted.map((m) => (
-              <div className="av-col" key={m.name}><Avatar name={m.name} status={m.done ? "done" : "wait"} dim={!m.done} />{m.name}</div>
+              <div className="av-col" key={m.name} style={{ opacity: m.done ? 1 : 0.7 }}><Avatar name={m.name} status={m.done ? "done" : "wait"} />{m.name}</div>
             ))}
           </div>
           {pending.length > 0 && (
             <div className="stack" style={{ marginTop: 16 }}>
-              <a className="btn wa block" href={waLink(nudgeText)} target="_blank" rel="noreferrer"><MessageCircle size={18} /> Nudge {pending.length === 1 ? pending[0] : `${pending.length} people`} on WhatsApp</a>
-              <button className="btn ghost block" onClick={() => copy(shareUrl, "Link copied")}><Copy size={16} /> Copy trip link</button>
+              <a className="btn primary block" href={waLink(nudgeText)} target="_blank" rel="noreferrer"><MessageCircle size={18} /> Nudge {pending.length === 1 ? pending[0] : `${pending.length} people`} on WhatsApp</a>
+              <button className="btn glassy block" onClick={() => copy(shareUrl, "Link copied")}><Copy size={16} /> Copy trip link</button>
             </div>
           )}
         </div>
@@ -403,7 +430,7 @@ export default function TripPage() {
       {decided && dw && (
         <div className="decided">
           <div className="img">
-            {decided.image ? <img src={decided.image} alt={decided.destination} /> : <Scene kind={sceneFor(decided.tags)} />}
+            <img src={decided.image ?? photoForTags(decided.tags).src} alt={decided.destination} />
           </div>
           <div className="body">
             <p className="eyebrow" style={{ color: "var(--lime)" }}><PartyPopper size={14} style={{ verticalAlign: -2 }} /> It&apos;s decided</p>
@@ -424,7 +451,7 @@ export default function TripPage() {
         <div className="card flat" style={{ background: "var(--moss)", border: 0 }}>
           <h3>Your top {s.options.length} trips</h3>
           <p className="small" style={{ color: "var(--forest-2)" }}>
-            Ranked by what works for <b>everyone</b>, not the majority. Mark each one <b>I&apos;m in</b> or <b>Can&apos;t do</b>. It locks as soon as all {trip.members.length} of you are in on one.
+            Ranked by what works for <b>everyone</b>. Tap <b>I&apos;m in</b> or <b>Can&apos;t do</b> on each. It locks when all {trip.members.length} of you are in on one.
           </p>
           {s.options[0]?.source === "rules" && <p className="tiny muted" style={{ marginTop: 6 }}>Built with the rules-only planner (AI was unavailable). Costs are rough estimates.</p>}
         </div>
@@ -450,10 +477,15 @@ export default function TripPage() {
         </div>
       )}
 
-      <Matrix options={s.options} members={trip.members} me={who?.member} />
+      {(trip.status !== "decided" || showAll) && <Matrix options={s.options} members={trip.members} me={who?.member} />}
 
+      {trip.status === "decided" && s.options.length > 1 && (
+        <button type="button" className="btn ghost block" onClick={() => setShowAll(!showAll)} style={{ margin: "4px 0 8px" }}>
+          {showAll ? "Hide the other options" : `See the other ${s.options.length - 1} options`}
+        </button>
+      )}
       <div className="opts-grid">
-        {s.options.map((o) => (
+        {s.options.filter((o) => trip.status !== "decided" || showAll || o.id === trip.decided_option_id).map((o) => (
           <OptionCard
             key={o.id}
             o={o}

@@ -2,7 +2,8 @@
 // OUTPUT: where everyone stands (matrix) + three photo cards with per-person fit and the vote.
 import { useState } from "react";
 import { Check, X, Wallet, Route, CalendarDays, Moon, ChevronDown, Lock, Users } from "lucide-react";
-import { Avatar, Scene, sceneFor, inrK } from "./ui";
+import { Avatar, inrK } from "./ui";
+import { photoForTags } from "@/lib/photos";
 import { leaveDays, rangeLabel } from "@/lib/holidays";
 
 export type Fit = { level: "works" | "stretch" | "no"; score: number; reasons: string[]; mine?: string[] };
@@ -82,11 +83,14 @@ export function OptionCard(props: {
   return (
     <article className={`opt ${props.won ? "won" : ""}`}>
       <div className="opt-hero">
-        {o.image && imgOk ? <img src={o.image} alt={o.destination} loading="lazy" onError={() => setImgOk(false)} /> : <Scene kind={sceneFor(o.tags)} seed={o.rank} />}
-        <span className="rank">{props.won ? "Locked in" : `Option ${o.rank}`}</span>
-        <span className="fitbadge">Works for {o.works_count}/{total}</span>
+        <img src={o.image && imgOk ? o.image : photoForTags(o.tags).src} alt={o.destination} loading="lazy" onError={() => setImgOk(false)} />
+        <span className="rank glass dark">{props.won ? "Locked in" : `Option ${o.rank}`}</span>
+        <span className="fitbadge glass lime">Works for {o.works_count}/{total}</span>
         <h2>{o.destination}</h2>
-        <div className="small" style={{ opacity: 0.9 }}>{o.region}{o.tags.length ? ` · ${o.tags.slice(0, 3).join(" · ")}` : ""}</div>
+        <div className="glass-row">
+          {o.region && <span className="glass clip">{o.region}</span>}
+          {o.tags.slice(0, o.region ? 1 : 2).map((t) => <span className="glass" key={t}>{t[0].toUpperCase() + t.slice(1)}</span>)}
+        </div>
       </div>
       <div className="opt-body">
         <p style={{ fontWeight: 600 }}>{o.summary}</p>
