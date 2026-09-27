@@ -5,7 +5,7 @@
 // - decision lock
 // Budgets and won't-dos stay private: reasons are phrased without numbers.
 
-import { PLACES, distanceKm, type Place } from "./catalogue";
+import { PLACES, distanceKm, featuresOf, type Place } from "./catalogue";
 import { findCity } from "./cities";
 import type { DateWindow, MemberEstimate, MemberFit, Preference, Trip, TripOption, Vote } from "./types";
 
@@ -39,30 +39,43 @@ export function groupNights(prefs: Preference[], maxNights: number) {
 // ---------- per-person fit ----------
 // `reasons` are shown to the whole group, so budget and won't-do details are folded into one
 // neutral line. `mine` holds the full detail and is only ever sent to that person (lib/view.ts).
+// `short` is the one main reason, shown at a glance next to "Doesn't work" / "Stretch".
+
+// Interest tags imply trip styles, so a "party" person matches a nightlife place even without explicit styles.
+const STYLE_FROM_TAG: Record<string, string[]> = {
+  nightlife: ["party"], food: ["food trail"], heritage: ["sightseeing", "culture"], city: ["shopping", "sightseeing"],
+  adventure: ["adventurous", "exploring"], chill: ["relaxed", "wellness"], beach: ["relaxed"], nature: ["exploring", "photography"],
+  mountains: ["adventurous", "photography"], spiritual: ["culture", "wellness"], wildlife: ["exploring", "photography"],
+  lakes: ["relaxed", "photography"], islands: ["relaxed"], desert: ["exploring"], snow: ["adventurous"],
+};
+export const stylesOf = (tags: string[]) => [...new Set([...tags, ...tags.flatMap((t) => STYLE_FROM_TAG[t] ?? [])])];
+
 export function scoreMember(c: Candidate, member: string, pref: Preference | undefined, win?: DateWindow): MemberFit {
-  if (!pref) return { level: "stretch", score: 50, reasons: ["Hasn't shared preferences yet"], mine: [] };
+  if (!pref) return { level: "stretch", score: 50, reasons: ["Hasn't shared preferences yet"], mine: [], short: "Hasn't answered yet" };
   const reasons: string[] = [];
   const mine: string[] = [];
+  const hard: string[] = []; // short labels, in order of importance
+  const softs: string[] = [];
   let score = 0;
-  let hardFail = false;
-  let soft = false;
   let privateNo = false;
   let privateSoft = false;
+  const no = (long: string, short: string) => { reasons.push(long); hard.push(short); };
+  const meh = (long: string, short: string) => { reasons.push(long); softs.push(short); };
 
-  if (pref.available_windows.includes(c.window_id)) {
-    reasons.push("Free on these dates");
-  } else if ((pref.maybe_windows ?? []).includes(c.window_id)) {
-    soft = true;
-    reasons.push("Dates might work");
-  } else if (win?.added_at && pref.updated_at < win.added_at) {
-    // Someone suggested these dates after this person answered: unknown, not a no.
-    soft = true;
-    reasons.push("Hasn't answered these dates yet");
-  } else {
-    hardFail = true;
-    reasons.push("Not free on these dates");
+  // Dates
+  if (pref.available_windows.includes(c.window_id)) reasons.push("Free on these dates");
+  else if ((pref.maybe_windows ?? []).includes(c.window_id)) meh("Dates might work", "Dates unsure");
+  else if (win?.added_at && pref.updated_at < win.added_at) meh("Hasn't answered these dates yet", "Hasn't seen these dates");
+  else no("Not free on these dates", "Not free these dates");
+
+  // Abroad
+  if (c.international) {
+    if ((pref.abroad ?? "no") === "no") no("Prefers to stay in India", "Prefers India");
+    else if (pref.abroad === "maybe") meh("Unsure about going abroad", "Unsure about abroad");
+    if (c.visa && pref.wont_do.includes("visa hassle")) { privateSoft = true; mine.push("Needs a visa, which you'd rather avoid"); }
   }
 
+  // Cost, deal-breakers, journey
   const est = c.estimates[member];
   if (est) {
     if (est.cost_max <= pref.budget_max) {
@@ -84,41 +97,45 @@ export function scoreMember(c: Candidate, member: string, pref: Preference | und
     // A journey that eats the trip is not a "stretch": 36h each way for 2 nights doesn't work.
     const hrs = Number(/(\d+(?:\.\d+)?)\s*h/.exec(est.travel)?.[1] ?? 0);
     const tooFar = Math.max(16, c.nights * 6);
-    if (hrs > tooFar) {
-      hardFail = true;
-      reasons.push(`Journey too long for ${c.nights} night${c.nights > 1 ? "s" : ""} (${est.travel.replace("~", "")} each way)`);
-    } else if (hrs > 12) {
-      soft = true;
-      score -= 10;
-      reasons.push(`Long journey (${est.travel.replace("~", "")})`);
-    }
+    if (hrs > tooFar) no(`Journey too long for ${c.nights} night${c.nights > 1 ? "s" : ""} (${est.travel.replace("~", "")} each way)`, "Journey too long");
+    else if (hrs > 12) { score -= 10; meh(`Long journey (${est.travel.replace("~", "")})`, "Long journey"); }
+    if (pref.must_haves?.includes("short travel") && hrs > 6) { privateSoft = true; mine.push("Longer travel than you wanted"); }
   } else {
     score += 35;
-    soft = true;
-    reasons.push("Cost not estimated");
+    meh("Cost not estimated", "Cost unknown");
   }
 
-  if (privateNo) {
-    hardFail = true;
-    reasons.push("Doesn't fit their private limits");
-  } else if (privateSoft) {
-    soft = true;
-    reasons.push("A stretch on their private limits");
+  // Must-haves (only when we know what the place offers)
+  const wants = (pref.must_haves ?? []).filter((m) => m !== "short travel");
+  if (c.has && wants.length) {
+    const missing = wants.filter((m) => !c.has!.includes(m));
+    if (missing.length) { privateSoft = true; mine.push(`Missing your must-have${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}`); }
   }
 
-  const vibeMatch = c.tags.filter((t) => pref.destination_types.includes(t));
-  if (vibeMatch.length) {
+  if (privateNo) no("Doesn't fit their private limits", "Over their limits");
+  else if (privateSoft) meh("A stretch on their private limits", "Stretches their limits");
+
+  // Vibe and kind of trip
+  const offer = stylesOf(c.tags);
+  const match = [...pref.destination_types, ...(pref.styles ?? [])].filter((t) => offer.includes(t));
+  if (match.length) {
     score += 30;
-    reasons.push(`Matches their vibe (${vibeMatch.slice(0, 2).join(", ")})`);
+    reasons.push(`Matches their vibe (${match.slice(0, 2).join(", ")})`);
   } else {
     score += 10;
-    soft = true;
-    reasons.push("Not their first-choice vibe");
+    meh("Not their first-choice vibe", "Not their vibe");
   }
 
+  const hardFail = hard.length > 0;
+  const soft = softs.length > 0;
   const level = hardFail ? "no" : !soft && score >= 75 ? "works" : "stretch";
-  return { level, score: hardFail ? Math.min(score, 30) : score, reasons, mine };
+  return { level, score: hardFail ? Math.min(score, 30) : score, reasons, mine, short: hard[0] ?? softs[0] };
 }
+
+const samePlace = (a: string, b: string) => {
+  const x = baseName(a), y = baseName(b);
+  return !!x && !!y && (x === y || x.includes(y) || y.includes(x));
+};
 
 // "Goa (North)", "North Goa" and "South Goa" are the same trip as far as the group is concerned.
 const baseName = (d: string) =>
@@ -133,7 +150,9 @@ export function rankCandidates(trip: Trip, prefs: Preference[], cands: Candidate
     const fits = Object.values(fit);
     const noCount = fits.filter((f) => f.level === "no").length;
     const avg = fits.reduce((s, f) => s + f.score, 0) / fits.length;
-    return { c, fit, noCount, group_score: Math.round(Math.max(0, avg - noCount * 25)) };
+    // Someone already had this place in mind: credit them, and use it as a small tie-break.
+    const suggested_by = prefs.filter((p) => (p.places ?? []).some((pl) => samePlace(pl, c.destination) || samePlace(pl, c.region))).map((p) => p.member);
+    return { c: { ...c, suggested_by }, fit, noCount, group_score: Math.round(Math.max(0, avg - noCount * 25 + (suggested_by.length ? 5 : 0))) };
   });
   scored.sort((a, b) => a.noCount - b.noCount || b.group_score - a.group_score);
 
@@ -144,6 +163,13 @@ export function rankCandidates(trip: Trip, prefs: Preference[], cands: Candidate
     seen.add(baseName(s.c.destination));
     top.push(s);
     if (top.length === 3) break;
+  }
+  // If the group is open to going abroad, make sure one of the three is abroad (the best one),
+  // so it's on the table even when someone would rather stay in India. Their row says why.
+  const openAbroad = prefs.filter((p) => p.abroad === "yes" || p.abroad === "maybe").length >= prefs.length / 2;
+  if (openAbroad && top.length === 3 && !top.some((t) => t.c.international)) {
+    const best = scored.find((x) => x.c.international && !seen.has(baseName(x.c.destination)));
+    if (best) top[2] = best;
   }
   const now = new Date().toISOString();
   return top.map((s, i) => ({
@@ -168,7 +194,7 @@ function originOf(pref: Preference): [number, number] | null {
 function travelFor(pref: Preference, place: Place, wontDo: string[]) {
   const from = originOf(pref);
   const d = from ? distanceKm(from, [place.lat, place.lon]) : 900;
-  const noFlights = wontDo.includes("flights");
+  const noFlights = wontDo.includes("flights") && (!place.intl || place.byLand);
   let mode: string, hours: number, cost: number;
   if (d < 60) [mode, hours, cost] = ["local", 1, 400];
   else if (d < 250) [mode, hours, cost] = ["drive", d / 50, d * 2 * 5];
@@ -183,6 +209,10 @@ function conflictFor(place: Place, wontDo: string[], hours: number, mode: string
   if (wontDo.includes("trekking / hikes") && place.tags.includes("adventure")) return "Hike-heavy spot";
   if (wontDo.includes("crowded party spots") && place.tags.includes("nightlife")) return "Party crowd";
   if (wontDo.includes("long road trips") && mode === "drive" && hours > 5) return "Long drive";
+  if (wontDo.includes("flights") && place.intl && !place.byLand) return "Needs a flight";
+  if (wontDo.includes("hot weather") && (place.tags.includes("desert") || (place.lat < 20 && place.lat > -10 && !place.tags.includes("mountains")))) return "Hot weather";
+  if (wontDo.includes("high altitude") && place.tags.includes("mountains") && place.lat > 27) return "High altitude";
+  if (wontDo.includes("very touristy spots") && ["Goa (North)", "Manali", "Dubai", "Phuket & Krabi", "Bali"].includes(place.name)) return "Very touristy";
   return null;
 }
 
@@ -199,10 +229,12 @@ export function estimateFor(place: Place, pref: Preference, nights: number): Mem
 
 export function rulesCandidates(trip: Trip, prefs: Preference[]): Candidate[] {
   const windows = windowCoverage(trip, prefs).slice(0, 2);
+  // Only consider going abroad if at least half the group is open to it.
+  const openAbroad = prefs.filter((p) => p.abroad === "yes" || p.abroad === "maybe").length >= prefs.length / 2;
   const out: Candidate[] = [];
   for (const { window } of windows) {
     const nights = groupNights(prefs, windowNights(window.start, window.end));
-    for (const place of PLACES) {
+    for (const place of PLACES.filter((p) => !p.intl || openAbroad)) {
       const estimates: Record<string, MemberEstimate> = {};
       for (const p of prefs) estimates[p.member] = estimateFor(place, p, nights);
       const wanted = prefs.filter((p) => p.destination_types.some((t) => place.tags.includes(t))).length;
@@ -216,6 +248,9 @@ export function rulesCandidates(trip: Trip, prefs: Preference[]): Candidate[] {
         tags: place.tags,
         estimates,
         source: "rules",
+        international: !!place.intl,
+        visa: !!place.visa,
+        has: featuresOf(place),
       });
     }
   }

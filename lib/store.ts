@@ -23,6 +23,50 @@ export interface Store {
   kind: "supabase" | "local";
 }
 
+// The newer preference fields (abroad, styles, must-haves, places) live inside the existing
+// destination_types text[] column as prefixed entries ("style:party", "place:Bali"), so no
+// database migration is needed. Only this file knows about the packing.
+const PREFIX = { styles: "style:", must_haves: "must:", places: "place:", abroad: "abroad:" } as const;
+
+function packPref(p: Preference) {
+  const { abroad, styles = [], must_haves = [], places = [], ...rest } = p;
+  return {
+    ...rest,
+    destination_types: [
+      ...p.destination_types,
+      ...styles.map((x) => PREFIX.styles + x),
+      ...must_haves.map((x) => PREFIX.must_haves + x),
+      ...places.map((x) => PREFIX.places + x),
+      ...(abroad ? [PREFIX.abroad + abroad] : []),
+    ],
+  };
+}
+
+function unpackPref(row: Preference): Preference {
+  const all = row.destination_types ?? [];
+  const pick = (pre: string) => all.filter((x) => x.startsWith(pre)).map((x) => x.slice(pre.length));
+  const abroad = pick(PREFIX.abroad)[0] as Preference["abroad"];
+  return {
+    ...row,
+    destination_types: all.filter((x) => !x.includes(":")),
+    styles: pick(PREFIX.styles),
+    must_haves: pick(PREFIX.must_haves),
+    places: pick(PREFIX.places),
+    abroad: abroad ?? "no",
+  };
+}
+
+// Same idea for options: the newer option fields ride along inside the estimates jsonb under "~meta".
+const META = "~meta";
+function packOpt(o: TripOption) {
+  const { international, visa, has, suggested_by, ...rest } = o;
+  return { ...rest, estimates: { ...o.estimates, [META]: { international, visa, has, suggested_by } } };
+}
+function unpackOpt(row: TripOption): TripOption {
+  const { [META]: meta, ...estimates } = (row.estimates ?? {}) as Record<string, any>;
+  return { ...row, estimates, ...(meta ?? {}) };
+}
+
 // ---------- Supabase ----------
 class SupabaseStore implements Store {
   kind = "supabase" as const;
@@ -45,22 +89,22 @@ class SupabaseStore implements Store {
     this.check(await this.db.from("trips").update(patch).eq("id", id));
   }
   async getPreferences(tripId: string) {
-    return (this.check(await this.db.from("preferences").select("*").eq("trip_id", tripId)) ?? []) as Preference[];
+    return ((this.check(await this.db.from("preferences").select("*").eq("trip_id", tripId)) ?? []) as Preference[]).map(unpackPref);
   }
   async upsertPreference(p: Preference) {
-    this.check(await this.db.from("preferences").upsert(p, { onConflict: "trip_id,member" }));
+    this.check(await this.db.from("preferences").upsert(packPref(p), { onConflict: "trip_id,member" }));
   }
   async deletePreference(tripId: string, member: string) {
     this.check(await this.db.from("preferences").delete().eq("trip_id", tripId).eq("member", member));
   }
   async getOptions(tripId: string) {
-    return (this.check(
+    return ((this.check(
       await this.db.from("options").select("*").eq("trip_id", tripId).order("rank")
-    ) ?? []) as TripOption[];
+    ) ?? []) as TripOption[]).map(unpackOpt);
   }
   async replaceOptions(tripId: string, opts: TripOption[]) {
     this.check(await this.db.from("options").delete().eq("trip_id", tripId));
-    if (opts.length) this.check(await this.db.from("options").insert(opts));
+    if (opts.length) this.check(await this.db.from("options").insert(opts.map(packOpt)));
   }
   async getVotes(tripId: string) {
     return (this.check(await this.db.from("votes").select("*").eq("trip_id", tripId)) ?? []) as Vote[];

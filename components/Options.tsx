@@ -1,12 +1,12 @@
 "use client";
 // OUTPUT: where everyone stands (matrix) + three photo cards with per-person fit and the vote.
 import { useState } from "react";
-import { Check, X, Wallet, Route, CalendarDays, Moon, ChevronDown, Lock, Users } from "lucide-react";
+import { Check, X, Wallet, Route, CalendarDays, Moon, ChevronDown, Lock, Users, Globe, Lightbulb } from "lucide-react";
 import { Avatar, inrK } from "./ui";
 import { photoForTags } from "@/lib/photos";
 import { leaveDays, rangeLabel } from "@/lib/holidays";
 
-export type Fit = { level: "works" | "stretch" | "no"; score: number; reasons: string[]; mine?: string[] };
+export type Fit = { level: "works" | "stretch" | "no"; score: number; reasons: string[]; mine?: string[]; short?: string };
 
 // Your own row shows your private detail (budget, deal-breakers) instead of the neutral line everyone else sees.
 const reasonsFor = (f: Fit) => (f.mine ? [...f.reasons.filter((r) => !r.includes("private limits")), ...f.mine] : f.reasons);
@@ -14,6 +14,7 @@ export type Opt = {
   id: string; rank: number; destination: string; region: string; window_id: string; nights: number;
   summary: string; why: string; tags: string[]; group_score: number; source: string; image: string | null;
   works_count: number; no_count: number;
+  international?: boolean; visa?: boolean; suggested_by?: string[];
   fit: Record<string, Fit>;
   my_estimate: { cost_min: number; cost_max: number; travel: string; conflict: string | null } | null;
   votes: { in: string[]; cant: string[]; pending: string[] };
@@ -59,6 +60,19 @@ export function Matrix({ options, members, me }: { options: Opt[]; members: stri
           </tr>
         </tfoot>
       </table>
+      {options.some((o) => members.some((m) => o.fit[m]?.level === "no")) && (
+        <div className="why-not">
+          {options.map((o) => {
+            const out = members.filter((m) => o.fit[m]?.level === "no");
+            return out.length ? (
+              <p key={o.id} className="small">
+                <b>{o.destination.replace(/\s*\(.*\)/, "")}:</b>{" "}
+                {out.map((m) => { const r = o.fit[m].short ?? "Doesn't work"; return `${m === me ? "you" : m} (${r[0].toLowerCase() + r.slice(1)})`; }).join(", ")}
+              </p>
+            ) : null;
+          })}
+        </div>
+      )}
       <div className="cal-legend" style={{ marginTop: 10 }}>
         <span><i style={{ background: "var(--works)" }} />Works</span>
         <span><i style={{ background: "#e5a524" }} />Stretch</span>
@@ -88,11 +102,15 @@ export function OptionCard(props: {
         <span className="fitbadge glass lime">Works for {o.works_count}/{total}</span>
         <h2>{o.destination}</h2>
         <div className="glass-row">
+          {o.international && <span className="glass lime"><Globe size={12} /> Abroad{o.visa ? " · visa needed" : ""}</span>}
           {o.region && <span className="glass clip">{o.region}</span>}
           {o.tags.slice(0, o.region ? 1 : 2).map((t) => <span className="glass" key={t}>{t[0].toUpperCase() + t.slice(1)}</span>)}
         </div>
       </div>
       <div className="opt-body">
+        {!!o.suggested_by?.length && (
+          <div className="suggested"><Lightbulb size={14} /> Suggested by {o.suggested_by.map((m) => (m === props.me ? "you" : m)).join(", ")}</div>
+        )}
         <p style={{ fontWeight: 600 }}>{o.summary}</p>
         <p className="small muted">{o.why}</p>
 
@@ -117,7 +135,10 @@ export function OptionCard(props: {
               <div key={m}>
                 <div className="stand-row" onClick={() => setOpen(open === m ? null : m)} role="button" aria-expanded={open === m}>
                   <Avatar name={m} size="sm" ring={f?.level} />
-                  <span className="nm">{m}{m === props.me ? " (you)" : ""}</span>
+                  <span className="nm">
+                    {m}{m === props.me ? " (you)" : ""}
+                    {f && f.level !== "works" && f.short && <span className="why">{f.short}</span>}
+                  </span>
                   {v && <span className={`lvl ${v === "in" ? "works" : "no"}`} style={{ background: "transparent" }}>{v === "in" ? <><Check size={12} strokeWidth={3} /> In</> : <><X size={12} strokeWidth={3} /> Can&apos;t</>}</span>}
                   <span className={`lvl ${f?.level}`}>{f ? LEVEL[f.level] : "—"}</span>
                   <ChevronDown size={15} color="var(--muted)" style={{ transform: open === m ? "rotate(180deg)" : undefined, transition: "transform .15s" }} />

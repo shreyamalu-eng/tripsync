@@ -106,6 +106,7 @@ textarea { min-height: 76px; resize: vertical; }
 .chip.on { background: var(--forest); border-color: var(--forest); color: #fff; }
 .chip.on svg { color: var(--lime); }
 .chip.static { cursor: default; }
+.chip.more { border-style: dashed; color: var(--forest-2); background: transparent; }
 .chip .x { opacity: 0.6; display: grid; place-items: center; }
 .chip-input { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px; border: 1.5px solid var(--line); border-radius: 16px; background: var(--paper); }
 .chip-input:focus-within { border-color: var(--forest-2); background: #fff; }
@@ -304,7 +305,11 @@ input[type="range"] { width: 100%; accent-color: var(--forest); height: 28px; }
 .heads-up { font-size: 12.5px; background: var(--stretch-bg); color: var(--stretch); border-radius: 10px; padding: 6px 10px; margin-top: 6px; }
 .stand { margin-top: 12px; }
 .stand-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); cursor: pointer; }
-.stand-row .nm { font-weight: 700; flex: 1; }
+.stand-row .nm { font-weight: 700; flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.stand-row .nm .why { font-weight: 550; font-size: 12px; color: var(--muted); }
+.why-not { margin-top: 10px; padding: 10px 12px; border-radius: 16px; background: var(--no-bg); color: #6d2620; }
+.why-not p { margin: 2px 0; }
+.suggested { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; color: var(--forest); background: var(--lime); border-radius: 999px; padding: 5px 11px; margin-bottom: 8px; }
 .lvl { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; font-weight: 750; font-size: 12px; white-space: nowrap; }
 .lvl.works { background: var(--works-bg); color: var(--works); }
 .lvl.stretch { background: var(--stretch-bg); color: var(--stretch); }

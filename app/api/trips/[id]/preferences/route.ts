@@ -1,7 +1,10 @@
 // INPUT: each person submits (or edits) their private preferences.
 import { getStore } from "@/lib/store";
 import { fail, json, newId, safe } from "@/lib/view";
-import { DESTINATION_TYPES, WONT_DO_OPTIONS, type Preference } from "@/lib/types";
+import { DESTINATION_TYPES, MUST_HAVES, TRIP_STYLES, WONT_DO_OPTIONS, type Preference } from "@/lib/types";
+
+const pickFrom = (list: readonly string[], v: unknown) =>
+  [...new Set((Array.isArray(v) ? v : []).filter((t): t is string => list.includes(t)))];
 
 async function handle(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
@@ -76,12 +79,14 @@ async function handle(req: Request, ctx: { params: Promise<{ id: string }> }) {
     available_windows: available,
     maybe_windows: maybe,
     trip_nights: nights,
-    destination_types: (Array.isArray(b.destination_types) ? b.destination_types : []).filter((t: string) =>
-      (DESTINATION_TYPES as readonly string[]).includes(t)
-    ),
-    wont_do: (Array.isArray(b.wont_do) ? b.wont_do : []).filter((t: string) =>
-      (WONT_DO_OPTIONS as readonly string[]).includes(t)
-    ),
+    destination_types: pickFrom(DESTINATION_TYPES, b.destination_types),
+    wont_do: pickFrom(WONT_DO_OPTIONS, b.wont_do),
+    styles: pickFrom(TRIP_STYLES, b.styles),
+    must_haves: pickFrom(MUST_HAVES, b.must_haves),
+    abroad: b.abroad === "yes" || b.abroad === "maybe" ? b.abroad : "no",
+    // Places people already have in mind: short, plain names only (no ":" so storage stays unambiguous).
+    places: [...new Set((Array.isArray(b.places) ? b.places : [])
+      .map((x: unknown) => String(x).replace(/[:<>]/g, "").trim().slice(0, 40)).filter(Boolean))].slice(0, 3) as string[],
     notes: String(b.notes ?? "").slice(0, 300),
     updated_at: new Date().toISOString(),
   };

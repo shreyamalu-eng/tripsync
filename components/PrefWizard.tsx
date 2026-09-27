@@ -4,17 +4,19 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Check, X, CircleHelp, ArrowLeft, ArrowRight, Lock, Loader2, TreePalm, Mountain, Building2, Landmark, Trees, Tent,
   Coffee, Music, UtensilsCrossed, Bus, Clock, Plane, Footprints, Snowflake, PartyPopper, BedDouble, Car, Sparkles, CalendarPlus,
+  PawPrint, Sun, Waves, Sailboat, Flower2, Sofa, Compass, Camera, ShoppingBag, MapPin, Wifi, House, Eye, CloudRain, Sunrise, Users, Globe, X as XIcon,
 } from "lucide-react";
 import CityPicker, { type CityValue } from "./CityPicker";
 import RangeCalendar, { type Win } from "./RangeCalendar";
 import { dayDiff, holidaysIn, leaveDays, rangeLabel } from "@/lib/holidays";
-import { inr, safeGet, safeSet } from "./ui";
+import { inr, inrK, safeGet, safeSet } from "./ui";
 
 type W = { id: string; label: string; start: string; end: string; added_by?: string; added_at?: string };
 type Initial = null | {
   updated_at?: string;
   origin_city: string; origin_lat: number | null; origin_lon: number | null; budget_max: number;
   available_windows: string[]; maybe_windows: string[]; trip_nights: number; destination_types: string[]; wont_do: string[]; notes: string;
+  abroad?: "yes" | "maybe" | "no"; styles?: string[]; must_haves?: string[]; places?: string[];
 };
 type Avail = "yes" | "maybe" | "no";
 
@@ -28,6 +30,42 @@ export const VIBES: { key: string; label: string; icon: React.ReactNode }[] = [
   { key: "chill", label: "Chill", icon: <Coffee size={24} /> },
   { key: "nightlife", label: "Nightlife", icon: <Music size={24} /> },
   { key: "food", label: "Food", icon: <UtensilsCrossed size={24} /> },
+  { key: "wildlife", label: "Wildlife", icon: <PawPrint size={24} /> },
+  { key: "snow", label: "Snow", icon: <Snowflake size={24} /> },
+  { key: "desert", label: "Desert", icon: <Sun size={24} /> },
+  { key: "lakes", label: "Lakes & rivers", icon: <Waves size={24} /> },
+  { key: "islands", label: "Islands", icon: <Sailboat size={24} /> },
+  { key: "spiritual", label: "Spiritual", icon: <Flower2 size={24} /> },
+];
+// How people want to spend the days.
+const STYLES: { key: string; label: string; icon: React.ReactNode }[] = [
+  { key: "relaxed", label: "Relaxed", icon: <Sofa size={15} /> },
+  { key: "adventurous", label: "Adventurous", icon: <Mountain size={15} /> },
+  { key: "party", label: "Parties", icon: <PartyPopper size={15} /> },
+  { key: "exploring", label: "Exploring", icon: <Compass size={15} /> },
+  { key: "sightseeing", label: "Sightseeing", icon: <Landmark size={15} /> },
+  { key: "food trail", label: "Food focused", icon: <UtensilsCrossed size={15} /> },
+  { key: "shopping", label: "Shopping spree", icon: <ShoppingBag size={15} /> },
+  { key: "wellness", label: "Wellness", icon: <Flower2 size={15} /> },
+  { key: "culture", label: "Local culture", icon: <Users size={15} /> },
+  { key: "photography", label: "Photography", icon: <Camera size={15} /> },
+];
+const MUSTS: { key: string; label: string; icon: React.ReactNode }[] = [
+  { key: "pool", label: "Pool", icon: <Waves size={15} /> },
+  { key: "beach nearby", label: "Beach nearby", icon: <TreePalm size={15} /> },
+  { key: "veg-friendly food", label: "Veg-friendly food", icon: <UtensilsCrossed size={15} /> },
+  { key: "villa / homestay", label: "Villa / homestay", icon: <House size={15} /> },
+  { key: "good cafes", label: "Good cafes", icon: <Coffee size={15} /> },
+  { key: "nightlife nearby", label: "Nightlife nearby", icon: <Music size={15} /> },
+  { key: "short travel", label: "Short travel", icon: <Clock size={15} /> },
+  { key: "wifi to work", label: "Wi-Fi to work", icon: <Wifi size={15} /> },
+  { key: "scenic views", label: "Scenic views", icon: <Eye size={15} /> },
+  { key: "easy on the legs", label: "Not much walking", icon: <Footprints size={15} /> },
+];
+const ABROAD: { key: "no" | "maybe" | "yes"; label: string; icon: React.ReactNode }[] = [
+  { key: "no", label: "India only", icon: <MapPin size={15} /> },
+  { key: "maybe", label: "Maybe", icon: <CircleHelp size={15} /> },
+  { key: "yes", label: "Yes, let's go abroad", icon: <Globe size={15} /> },
 ];
 const WONTS: { key: string; label: string; icon: React.ReactNode }[] = [
   { key: "overnight bus", label: "Overnight bus", icon: <Bus size={15} /> },
@@ -38,8 +76,14 @@ const WONTS: { key: string; label: string; icon: React.ReactNode }[] = [
   { key: "crowded party spots", label: "Party crowds", icon: <PartyPopper size={15} /> },
   { key: "hostels / shared dorms", label: "Hostels / dorms", icon: <BedDouble size={15} /> },
   { key: "long road trips", label: "Long road trips", icon: <Car size={15} /> },
+  { key: "hot weather", label: "Hot weather", icon: <Sun size={15} /> },
+  { key: "high altitude", label: "High altitude", icon: <Mountain size={15} /> },
+  { key: "visa hassle", label: "Visa hassle", icon: <Plane size={15} /> },
+  { key: "very touristy spots", label: "Very touristy spots", icon: <Users size={15} /> },
+  { key: "monsoon / rain", label: "Rain", icon: <CloudRain size={15} /> },
+  { key: "early mornings", label: "Early mornings", icon: <Sunrise size={15} /> },
 ];
-const BUDGETS = [8000, 12000, 15000, 20000, 30000, 50000];
+const BUDGETS = [8000, 12000, 15000, 20000, 30000, 50000, 75000, 100000];
 const STEPS = ["Dates", "City & budget", "Vibe"];
 
 export default function PrefWizard(props: {
@@ -65,14 +109,29 @@ export default function PrefWizard(props: {
   const [easy, setEasy] = useState<boolean>(draft?.easy ?? (!!i && i.wont_do.length === 0));
   const [notes, setNotes] = useState<string>(draft?.notes ?? i?.notes ?? "");
   const [showNotes, setShowNotes] = useState(!!(draft?.notes || i?.notes));
+  const [abroad, setAbroad] = useState<"yes" | "maybe" | "no">(draft?.abroad ?? i?.abroad ?? "no");
+  const [styles, setStyles] = useState<string[]>(draft?.styles ?? i?.styles ?? []);
+  const [musts, setMusts] = useState<string[]>(draft?.musts ?? i?.must_haves ?? []);
+  const [places, setPlaces] = useState<string[]>(draft?.places ?? i?.places ?? []);
+  const [placeDraft, setPlaceDraft] = useState("");
+  // Long lists start short; anything already picked always shows.
+  const [moreMust, setMoreMust] = useState(false);
+  const [moreWont, setMoreWont] = useState(false);
+  const shown = <T extends { key: string }>(list: T[], n: number, all: boolean, picked: string[]) =>
+    all ? list : list.filter((x, k) => k < n || picked.includes(x.key));
+  const addPlace = () => {
+    const v = placeDraft.replace(/[:<>]/g, "").trim().slice(0, 40);
+    if (v && places.length < 3 && !places.some((p) => p.toLowerCase() === v.toLowerCase())) setPlaces([...places, v]);
+    setPlaceDraft("");
+  };
   // Dates this person suggests on top of the organiser's. They count as "Can go" for them.
   const [extra, setExtra] = useState<Win[]>(draft?.extra ?? []);
   const [showCal, setShowCal] = useState(!!draft?.extra?.length);
   const room = Math.max(0, 6 - props.windows.length);
 
   useEffect(() => {
-    safeSet(draftKey, JSON.stringify({ step, avail, city, budget, nights, vibes, wont, easy, notes, extra }));
-  }, [draftKey, step, avail, city, budget, nights, vibes, wont, easy, notes, extra]);
+    safeSet(draftKey, JSON.stringify({ step, avail, city, budget, nights, vibes, wont, easy, notes, extra, abroad, styles, musts, places }));
+  }, [draftKey, step, avail, city, budget, nights, vibes, wont, easy, notes, extra, abroad, styles, musts, places]);
   useEffect(() => { window.scrollTo({ top: 0, behavior: "smooth" }); }, [step]);
 
   const answered = props.windows.filter((w) => avail[w.id]).length;
@@ -102,6 +161,10 @@ export default function PrefWizard(props: {
       wont_do: easy ? [] : wont,
       notes,
       new_windows: extra,
+      abroad,
+      styles,
+      must_haves: musts,
+      places: placeDraft.trim() && places.length < 3 ? [...places, placeDraft.trim()] : places,
     });
   }
 
@@ -188,7 +251,7 @@ export default function PrefWizard(props: {
             <input type="range" min={5000} max={100000} step={1000} value={budget} onChange={(e) => setBudget(Number(e.target.value))} aria-label="Budget" />
             <div className="chips">
               {BUDGETS.map((b) => (
-                <button type="button" key={b} className={`chip ${budget === b ? "on" : ""}`} onClick={() => setBudget(b)}>{inr(b).replace(",000", "k")}</button>
+                <button type="button" key={b} className={`chip ${budget === b ? "on" : ""}`} onClick={() => setBudget(b)}>{inrK(b)}</button>
               ))}
             </div>
           </div>
@@ -201,14 +264,35 @@ export default function PrefWizard(props: {
               </button>
             ))}
           </div>
+
+          <label className="lbl" style={{ marginTop: 24 }}>Open to a trip abroad?</label>
+          <p className="hint">Short-haul trips like Thailand, Sri Lanka, Nepal or Bali. We only suggest these if at least half the group is open to it.</p>
+          <div className="chips">
+            {ABROAD.map((a) => (
+              <button type="button" key={a.key} className={`chip ${abroad === a.key ? "on" : ""}`} onClick={() => setAbroad(a.key)} aria-pressed={abroad === a.key}>
+                {a.icon}{a.label}
+              </button>
+            ))}
+          </div>
         </section>
       )}
 
       {step === 2 && (
         <section>
           <h1 style={{ fontSize: 26, marginTop: 18 }}>What kind of trip?</h1>
-          <p className="muted small">Pick as many as you like.</p>
-          <div className="tiles" style={{ marginTop: 12 }}>
+          <p className="muted small">Everything here is optional. Pick as many as you like.</p>
+
+          <label className="lbl">How do you want to spend the days?</label>
+          <div className="chips">
+            {STYLES.map((v) => (
+              <button type="button" key={v.key} className={`chip ${styles.includes(v.key) ? "on" : ""}`} onClick={() => toggle(styles, setStyles, v.key)} aria-pressed={styles.includes(v.key)}>
+                {v.icon}{v.label}
+              </button>
+            ))}
+          </div>
+
+          <label className="lbl" style={{ marginTop: 24 }}>What would you love to see?</label>
+          <div className="tiles">
             {VIBES.map((v) => (
               <button type="button" key={v.key} className={`tile ${vibes.includes(v.key) ? "on" : ""}`} onClick={() => toggle(vibes, setVibes, v.key)} aria-pressed={vibes.includes(v.key)}>
                 {vibes.includes(v.key) && <span className="tick"><Check size={12} strokeWidth={3} /></span>}
@@ -217,18 +301,44 @@ export default function PrefWizard(props: {
             ))}
           </div>
 
+          <label className="lbl" style={{ marginTop: 24 }}>Any must-haves?</label>
+          <div className="chips">
+            {shown(MUSTS, 5, moreMust, musts).map((v) => (
+              <button type="button" key={v.key} className={`chip ${musts.includes(v.key) ? "on" : ""}`} onClick={() => toggle(musts, setMusts, v.key)} aria-pressed={musts.includes(v.key)}>
+                {v.icon}{v.label}
+              </button>
+            ))}
+            {!moreMust && <button type="button" className="chip more" onClick={() => setMoreMust(true)}>+ {MUSTS.length - shown(MUSTS, 5, false, musts).length} more</button>}
+          </div>
+
           <label className="lbl" style={{ marginTop: 24 }}>Anything that&apos;s a deal-breaker?</label>
           <p className="hint">Only you see this. Others just see that an option “clashes with something they'd rather avoid”.</p>
           <div className="chips">
             <button type="button" className={`chip ${easy ? "on" : ""}`} onClick={() => { setEasy(!easy); if (!easy) setWont([]); }}>
               <Check size={15} /> Nothing, I&apos;m easy
             </button>
-            {WONTS.map((w) => (
+            {shown(WONTS, 7, moreWont, wont).map((w) => (
               <button type="button" key={w.key} className={`chip ${wont.includes(w.key) ? "on" : ""}`}
                 onClick={() => { setEasy(false); toggle(wont, setWont, w.key); }} aria-pressed={wont.includes(w.key)}>
                 {w.icon}{w.label}
               </button>
             ))}
+            {!moreWont && <button type="button" className="chip more" onClick={() => setMoreWont(true)}>+ {WONTS.length - shown(WONTS, 7, false, wont).length} more</button>}
+          </div>
+
+          <label className="lbl" style={{ marginTop: 24 }}>Any places already in mind?</label>
+          <p className="hint">Up to 3. The group will see who suggested them.</p>
+          <div className="chip-input">
+            {places.map((p) => (
+              <span key={p} className="chip static"><MapPin size={14} /> {p}
+                <button type="button" className="x" aria-label={`Remove ${p}`} style={{ background: "none", border: 0, cursor: "pointer", padding: 2 }} onClick={() => setPlaces(places.filter((x) => x !== p))}><XIcon size={14} /></button>
+              </span>
+            ))}
+            {places.length < 3 && (
+              <input type="text" value={placeDraft} placeholder={places.length ? "Add another…" : "e.g. Gokarna, Bali"} maxLength={40}
+                onChange={(e) => { if (e.target.value.endsWith(",")) { setPlaceDraft(e.target.value.slice(0, -1)); setTimeout(addPlace); } else setPlaceDraft(e.target.value); }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPlace(); } }} onBlur={addPlace} />
+            )}
           </div>
 
           {!showNotes ? (

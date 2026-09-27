@@ -40,7 +40,14 @@ export type Preference = {
   wont_do: string[];
   notes: string;
   updated_at: string;
+  // Added later. Stored inside destination_types in Supabase (see lib/store.ts), so no migration.
+  abroad?: Abroad; // open to international trips?
+  styles?: string[]; // kind of trip: relaxed, party, ...
+  must_haves?: string[];
+  places?: string[]; // places this person already has in mind
 };
+
+export type Abroad = "yes" | "maybe" | "no";
 
 export type FitLevel = "works" | "stretch" | "no";
 
@@ -49,6 +56,7 @@ export type MemberFit = {
   score: number; // 0-100
   reasons: string[]; // safe to show the group - no budgets or won't-dos
   mine?: string[]; // private detail (budget, won't-dos): only sent to this person
+  short?: string; // the one main reason, for "doesn't work" / "stretch" at a glance
 };
 
 export type MemberEstimate = {
@@ -74,6 +82,10 @@ export type TripOption = {
   group_score: number;
   image: string | null; // destination photo URL (Wikipedia), or null -> illustrated fallback
   source: "gemini" | "rules";
+  international?: boolean;
+  visa?: boolean; // Indian passport needs a visa arranged in advance
+  has?: string[]; // which must-haves this place offers (when known)
+  suggested_by?: string[]; // people who had this place in mind
   created_at: string;
 };
 
@@ -95,6 +107,39 @@ export const DESTINATION_TYPES = [
   "chill",
   "nightlife",
   "food",
+  "wildlife",
+  "snow",
+  "desert",
+  "lakes",
+  "islands",
+  "spiritual",
+] as const;
+
+// The kind of trip someone wants (how they want to spend the days).
+export const TRIP_STYLES = [
+  "relaxed",
+  "adventurous",
+  "party",
+  "exploring",
+  "sightseeing",
+  "food trail",
+  "shopping",
+  "wellness",
+  "culture",
+  "photography",
+] as const;
+
+export const MUST_HAVES = [
+  "pool",
+  "beach nearby",
+  "veg-friendly food",
+  "villa / homestay",
+  "good cafes",
+  "nightlife nearby",
+  "short travel",
+  "wifi to work",
+  "scenic views",
+  "easy on the legs",
 ] as const;
 
 export const WONT_DO_OPTIONS = [
@@ -106,4 +151,10 @@ export const WONT_DO_OPTIONS = [
   "crowded party spots",
   "hostels / shared dorms",
   "long road trips",
+  "hot weather",
+  "high altitude",
+  "visa hassle",
+  "very touristy spots",
+  "monsoon / rain",
+  "early mornings",
 ] as const;

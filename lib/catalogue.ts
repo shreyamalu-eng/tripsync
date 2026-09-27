@@ -10,6 +10,9 @@ export type Place = {
   tags: string[];
   perNight: number; // stay + food + local transport, per person, mid-range
   blurb: string;
+  intl?: boolean;
+  visa?: boolean; // Indian passport must arrange a visa (or e-visa) in advance
+  byLand?: boolean; // reachable without flying
 };
 
 export const PLACES: Place[] = [
@@ -35,7 +38,30 @@ export const PLACES: Place[] = [
   { name: "Shillong", region: "Meghalaya", lat: 25.58, lon: 91.89, tags: ["nature", "mountains", "chill", "food"], perNight: 2800, blurb: "Waterfalls, living-root bridges and live music." },
   { name: "Alibaug", region: "Maharashtra", lat: 18.64, lon: 72.87, tags: ["beach", "chill", "food"], perNight: 3600, blurb: "Easy beach villas a ferry ride from Mumbai." },
   { name: "Darjeeling", region: "West Bengal", lat: 27.04, lon: 88.26, tags: ["mountains", "heritage", "nature", "chill"], perNight: 2700, blurb: "Tea gardens and Kanchenjunga views." },
+  // International, short-haul from India. Visa notes are for Indian passports and change often: check before booking.
+  { name: "Phuket & Krabi", region: "Thailand", lat: 8.03, lon: 98.83, tags: ["beach", "islands", "nightlife", "food"], perNight: 4200, blurb: "Island hopping, night markets and beach bars.", intl: true },
+  { name: "Bali", region: "Indonesia", lat: -8.41, lon: 115.19, tags: ["beach", "islands", "spiritual", "chill", "nightlife"], perNight: 4000, blurb: "Rice terraces, temples and beach clubs.", intl: true },
+  { name: "Kathmandu & Pokhara", region: "Nepal", lat: 28.21, lon: 83.99, tags: ["mountains", "lakes", "adventure", "spiritual"], perNight: 2500, blurb: "Lakeside cafes, Himalayan views, paragliding.", intl: true, byLand: true },
+  { name: "Sri Lanka south coast", region: "Sri Lanka", lat: 6.03, lon: 80.22, tags: ["beach", "heritage", "wildlife", "food"], perNight: 3600, blurb: "Galle fort, surf beaches and safaris.", intl: true, visa: true },
+  { name: "Paro & Thimphu", region: "Bhutan", lat: 27.43, lon: 89.42, tags: ["mountains", "spiritual", "heritage", "nature"], perNight: 5200, blurb: "Cliffside monasteries and calm valleys.", intl: true, byLand: true },
+  { name: "Dubai", region: "UAE", lat: 25.2, lon: 55.27, tags: ["city", "desert", "nightlife", "food"], perNight: 6500, blurb: "Desert safari, malls and skyline nights.", intl: true, visa: true },
+  { name: "Hanoi & Ha Long Bay", region: "Vietnam", lat: 20.95, lon: 107.08, tags: ["nature", "islands", "food", "heritage"], perNight: 3300, blurb: "Street food and limestone bay cruises.", intl: true, visa: true },
 ];
+
+/** What a place offers, for must-have checks (derived from its tags; "pool" and "wifi" are best guesses). */
+export function featuresOf(p: Place): string[] {
+  const t = new Set(p.tags);
+  const f = new Set<string>(["veg-friendly food"]);
+  if (t.has("beach") || t.has("islands")) f.add("beach nearby").add("pool");
+  if (t.has("chill") || t.has("nature") || t.has("mountains")) f.add("villa / homestay");
+  if (t.has("nightlife")) f.add("nightlife nearby");
+  if (t.has("food") || t.has("city") || t.has("chill")) f.add("good cafes");
+  if (t.has("city") || t.has("beach") || t.has("chill")) f.add("wifi to work");
+  if (t.has("mountains") || t.has("nature") || t.has("lakes") || t.has("beach") || t.has("islands") || t.has("desert")) f.add("scenic views");
+  if (!t.has("adventure") && !t.has("mountains")) f.add("easy on the legs");
+  if (t.has("city") && (p.perNight >= 4000)) f.add("pool");
+  return [...f];
+}
 
 export function distanceKm(a: [number, number], b: [number, number]) {
   const R = 6371;

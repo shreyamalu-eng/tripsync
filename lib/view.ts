@@ -57,11 +57,14 @@ export async function publicState(trip: Trip, who?: { member?: string | null; to
       works_count: Object.values(o.fit).filter((f) => f.level === "works").length,
       no_count: Object.values(o.fit).filter((f) => f.level === "no").length,
       source: o.source,
+      international: !!o.international,
+      visa: !!o.visa,
+      suggested_by: o.suggested_by ?? [],
       // Levels + neutral reasons for everyone; the private detail only for the viewer's own row.
       fit: Object.fromEntries(
         Object.entries(o.fit).map(([m, f]) => [
           m,
-          { level: f.level, score: f.score, reasons: f.reasons, ...(mine?.member === m ? { mine: f.mine ?? [] } : {}) },
+          { level: f.level, score: f.score, reasons: f.reasons, short: f.short, ...(mine?.member === m ? { mine: f.mine ?? [] } : {}) },
         ])
       ),
       my_estimate: mine ? o.estimates[mine.member] ?? null : null,
@@ -80,6 +83,10 @@ export async function publicState(trip: Trip, who?: { member?: string | null; to
           trip_nights: mine.trip_nights,
           destination_types: mine.destination_types,
           wont_do: mine.wont_do,
+          abroad: mine.abroad ?? "no",
+          styles: mine.styles ?? [],
+          must_haves: mine.must_haves ?? [],
+          places: mine.places ?? [],
           notes: mine.notes,
           my_votes: Object.fromEntries(votes.filter((v) => v.member === mine.member).map((v) => [v.option_id, v.vote])),
         }
